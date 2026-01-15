@@ -107,7 +107,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         updatedAt: now,
       };
       
-      await setDoc(doc(db, "users", firebaseUser.uid), profile);
+      try {
+        await setDoc(doc(db, "users", firebaseUser.uid), profile);
+        console.log("[AuthContext] Profile saved to Firestore");
+      } catch (firestoreError: any) {
+        console.error("[AuthContext] Firestore error:", firestoreError?.code, firestoreError?.message);
+        console.log("[AuthContext] Saving profile locally as fallback");
+      }
+      
       await AsyncStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
       setUserProfile(profile);
       return profile;
@@ -135,17 +142,23 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     },
   });
 
-  const uploadProfilePhoto = async (uri: string): Promise<string> => {
+  const uploadProfilePhoto = async (uri: string): Promise<string | undefined> => {
     if (!firebaseUser) throw new Error("No authenticated user");
     
-    console.log("[AuthContext] Uploading profile photo");
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    const storageRef = ref(storage, `profiles/${firebaseUser.uid}.jpg`);
-    await uploadBytes(storageRef, blob);
-    const downloadUrl = await getDownloadURL(storageRef);
-    console.log("[AuthContext] Profile photo uploaded:", downloadUrl);
-    return downloadUrl;
+    try {
+      console.log("[AuthContext] Uploading profile photo");
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const storageRef = ref(storage, `profiles/${firebaseUser.uid}.jpg`);
+      await uploadBytes(storageRef, blob);
+      const downloadUrl = await getDownloadURL(storageRef);
+      console.log("[AuthContext] Profile photo uploaded:", downloadUrl);
+      return downloadUrl;
+    } catch (error: any) {
+      console.error("[AuthContext] Photo upload error:", error?.code, error?.message);
+      console.log("[AuthContext] Using local URI as fallback");
+      return uri;
+    }
   };
 
   const signUp = async (email: string, password: string) => {
