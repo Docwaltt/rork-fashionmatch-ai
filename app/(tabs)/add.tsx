@@ -1,3 +1,5 @@
+import { functions } from "@/lib/firebase";
+import { httpsCallable } from "firebase/functions";
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
@@ -40,41 +42,44 @@ export default function AddItemScreen() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<ClothingCategory | null>(null);
+  const [detectedColors, setDetectedColors] = useState<string[]>([]);
   const { addItem } = useWardrobe();
 
   const processImageMutation = useMutation({
-    mutationFn: async (imageUri: string) => {
-      // In a real app, we would upload to a server.
-      // For this demo, we'll simulate the AI processing delay and just use the image.
-      // But we will try to use the toolkit API as requested in the previous code.
+    mutationFn: async (imageBase64: string) => {
       try {
-        const response = await fetch("https://toolkit.rork.com/images/edit/", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            prompt: "Remove the background and the person from this image, keeping only the clothing item. Make the background transparent.",
-            images: [{ type: "image", image: imageUri }],
-            aspectRatio: "1:1",
-          }),
-        });
-  
-        if (!response.ok) {
-           // Fallback if API fails
-           return imageUri;
-        }
-  
-        const data = await response.json();
-        return `data:${data.image.mimeType};base64,${data.image.base64Data}`;
+        const processClothing = httpsCallable(functions, 'processClothingFn');
+        const { data } = await processClothing({ image: imageBase64 });
+        return data as { category?: string; color?: string; cleanedImage?: string };
       } catch (e) {
         console.error("Processing failed", e);
-        return imageUri; // Fallback
+        throw e;
       }
     },
-    onSuccess: (processedUri) => {
-      setProcessedImage(processedUri);
+    onSuccess: (data) => {
+      if (data.cleanedImage) {
+        setProcessedImage(data.cleanedImage);
+      }
+      
+      if (data.category) {
+        const catLower = data.category.toLowerCase();
+        const matchedCat = CATEGORIES.find(c => 
+          catLower.includes(c.id) || catLower.includes(c.label.toLowerCase())
+        );
+        if (matchedCat) {
+          setSelectedCategory(matchedCat.id);
+        }
+      }
+
+      if (data.color) {
+        setDetectedColors([data.color]);
+      }
     },
+    onError: (error) => {
+       console.log("Error processing image", error);
+       // If fails, we still have the captured image, but we don't set processedImage
+       // User can manually select category
+    }
   });
 
   const handleTakePhoto = async () => {
@@ -125,7 +130,7 @@ export default function AddItemScreen() {
       id: Date.now().toString(),
       imageUri: processedImage,
       category: selectedCategory,
-      colors: [] as string[],
+      colors: detectedColors,
       addedAt: Date.now(),
     };
 
@@ -134,6 +139,7 @@ export default function AddItemScreen() {
     setCapturedImage(null);
     setProcessedImage(null);
     setSelectedCategory(null);
+    setDetectedColors([]);
     processImageMutation.reset();
     
     router.back();
@@ -143,6 +149,7 @@ export default function AddItemScreen() {
     setCapturedImage(null);
     setProcessedImage(null);
     setSelectedCategory(null);
+    setDetectedColors([]);
     processImageMutation.reset();
   };
 
@@ -243,6 +250,28 @@ export default function AddItemScreen() {
             </View>
 
             <View style={styles.formSection}>
+              {detectedColors.length > 0 && (
+                <View style={{ marginBottom: 24 }}>
+                  <Text style={styles.sectionTitle}>COLOR</Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {detectedColors.map((color, index) => (
+                      <View key={index} style={{ 
+                        paddingHorizontal: 16, 
+                        paddingVertical: 8, 
+                        backgroundColor: Colors.card,
+                        borderWidth: 1,
+                        borderColor: Colors.gold[400],
+                        borderRadius: 0,
+                      }}>
+                        <Text style={{ color: Colors.gold[400], fontSize: 12, fontWeight: '600', letterSpacing: 1 }}>
+                          {color.toUpperCase()}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
               <Text style={styles.sectionTitle}>CATEGORY</Text>
               <View style={styles.categoryGrid}>
                 {CATEGORIES.map((cat) => (
