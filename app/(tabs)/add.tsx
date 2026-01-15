@@ -21,7 +21,7 @@ import { BlurView } from "expo-blur";
 
 import Colors from "@/constants/colors";
 import { useWardrobe } from "@/contexts/WardrobeContext";
-import { ClothingItem, ClothingCategory } from "@/types/wardrobe";
+import { ClothingCategory } from "@/types/wardrobe";
 
 const CATEGORIES: { id: ClothingCategory; label: string; icon: string }[] = [
   { id: "top", label: "Top", icon: "TOP" },
@@ -121,11 +121,11 @@ export default function AddItemScreen() {
   const handleSaveItem = () => {
     if (!processedImage || !selectedCategory) return;
 
-    const newItem: ClothingItem = {
+    const newItem = {
       id: Date.now().toString(),
       imageUri: processedImage,
       category: selectedCategory,
-      colors: [],
+      colors: [] as string[],
       addedAt: Date.now(),
     };
 

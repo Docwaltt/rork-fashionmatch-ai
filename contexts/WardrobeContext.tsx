@@ -1,40 +1,71 @@
 import createContextHook from "@nkzw/create-context-hook";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
-import { ClothingItem } from "@/types/wardrobe";
-import { db, storage } from "@/lib/firebase";
-import { collection, getDocs, addDoc, deleteDoc, doc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { useCallback, useState, useEffect } from "react";
+import { ClothingItem, ClothingCategory } from "@/types/wardrobe";
+import { db, storage, auth } from "@/lib/firebase";
+import { collection, getDocs, addDoc, deleteDoc, doc, query, where } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
   const [items, setItems] = useState<ClothingItem[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      console.log('[WardrobeContext] Auth state changed, user:', user?.uid);
+      setCurrentUserId(user?.uid || null);
+      if (user) {
+        queryClient.invalidateQueries({ queryKey: ["wardrobe", user.uid] });
+      } else {
+        setItems([]);
+      }
+    });
+    return () => unsubscribe();
+  }, [queryClient]);
+
   const wardrobeQuery = useQuery({
-    queryKey: ["wardrobe"],
+    queryKey: ["wardrobe", currentUserId],
     queryFn: async () => {
-      console.log('[WardrobeContext] Fetching items from Firestore');
-      const querySnapshot = await getDocs(collection(db, "wardrobe"));
-      const items: ClothingItem[] = [];
-      querySnapshot.forEach((doc) => {
-        items.push({ ...doc.data(), id: doc.id } as ClothingItem);
+      if (!currentUserId) {
+        console.log('[WardrobeContext] No user, returning empty array');
+        return [];
+      }
+      
+      console.log('[WardrobeContext] Fetching items for user:', currentUserId);
+      const q = query(
+        collection(db, "wardrobe"),
+        where("userId", "==", currentUserId)
+      );
+      const querySnapshot = await getDocs(q);
+      const fetchedItems: ClothingItem[] = [];
+      querySnapshot.forEach((docSnap) => {
+        fetchedItems.push({ ...docSnap.data(), id: docSnap.id } as ClothingItem);
       });
-      console.log('[WardrobeContext] Fetched items:', items.length);
-      setItems(items);
-      return items;
+      console.log('[WardrobeContext] Fetched items:', fetchedItems.length);
+      setItems(fetchedItems);
+      return fetchedItems;
     },
+    enabled: !!currentUserId,
   });
 
   const addItemMutation = useMutation({
-    mutationFn: async (item: ClothingItem) => {
-      console.log('[WardrobeContext] Adding item to Firestore:', item.category);
-      await addDoc(collection(db, "wardrobe"), item);
-      console.log('[WardrobeContext] Item added successfully');
-      return item;
+    mutationFn: async (item: Omit<ClothingItem, "userId"> & { userId?: string }) => {
+      if (!currentUserId) throw new Error("No authenticated user");
+      
+      const itemWithUser: ClothingItem = {
+        ...item,
+        userId: currentUserId,
+      };
+      
+      console.log('[WardrobeContext] Adding item to Firestore:', itemWithUser.category);
+      const docRef = await addDoc(collection(db, "wardrobe"), itemWithUser);
+      console.log('[WardrobeContext] Item added successfully with ID:', docRef.id);
+      return { ...itemWithUser, id: docRef.id };
     },
     onSuccess: () => {
       console.log('[WardrobeContext] Add mutation success, invalidating queries');
-      queryClient.invalidateQueries({ queryKey: ["wardrobe"] });
+      queryClient.invalidateQueries({ queryKey: ["wardrobe", currentUserId] });
     },
     onError: (error) => {
       console.error('[WardrobeContext] Add mutation error:', error);
@@ -43,14 +74,25 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
 
   const removeItemMutation = useMutation({
     mutationFn: async (id: string) => {
+      if (!currentUserId) throw new Error("No authenticated user");
+      
       console.log('[WardrobeContext] Removing item from Firestore:', id);
+      
+      try {
+        const storageRef = ref(storage, `wardrobe/${currentUserId}/${id}.jpg`);
+        await deleteObject(storageRef);
+        console.log('[WardrobeContext] Image deleted from storage');
+      } catch (e) {
+        console.log('[WardrobeContext] No image to delete or error:', e);
+      }
+      
       await deleteDoc(doc(db, "wardrobe", id));
       console.log('[WardrobeContext] Item removed successfully');
       return id;
     },
     onSuccess: () => {
       console.log('[WardrobeContext] Remove mutation success, invalidating queries');
-      queryClient.invalidateQueries({ queryKey: ["wardrobe"] });
+      queryClient.invalidateQueries({ queryKey: ["wardrobe", currentUserId] });
     },
     onError: (error) => {
       console.error('[WardrobeContext] Remove mutation error:', error);
@@ -58,17 +100,19 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
   });
 
   const uploadImage = async (uri: string, itemId: string): Promise<string> => {
+    if (!currentUserId) throw new Error("No authenticated user");
+    
     console.log('[WardrobeContext] Uploading image to Firebase Storage');
     const response = await fetch(uri);
     const blob = await response.blob();
-    const storageRef = ref(storage, `wardrobe/${itemId}.jpg`);
+    const storageRef = ref(storage, `wardrobe/${currentUserId}/${itemId}.jpg`);
     await uploadBytes(storageRef, blob);
     const downloadUrl = await getDownloadURL(storageRef);
     console.log('[WardrobeContext] Image uploaded, URL:', downloadUrl);
     return downloadUrl;
   };
 
-  const addItem = (item: ClothingItem) => {
+  const addItem = (item: Omit<ClothingItem, "userId">) => {
     console.log('[WardrobeContext] Adding item:', item.id, item.category);
     addItemMutation.mutate(item);
   };
@@ -79,7 +123,7 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
   };
 
   const getItemsByCategory = useCallback(
-    (category: ClothingItem["category"]) => {
+    (category: ClothingCategory) => {
       return items.filter((item) => item.category === category);
     },
     [items]
@@ -93,5 +137,6 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
     getItemsByCategory,
     isLoading: wardrobeQuery.isLoading,
     isSaving: addItemMutation.isPending || removeItemMutation.isPending,
+    currentUserId,
   };
 });
