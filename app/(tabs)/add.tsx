@@ -124,12 +124,11 @@ export default function AddItemScreen() {
   };
 
   const handleSaveItem = () => {
-    const imageToSave = processedImage || capturedImage;
-    if (!imageToSave || !selectedCategory) return;
+    if (!processedImage || !selectedCategory) return;
 
     const newItem = {
       id: Date.now().toString(),
-      imageUri: imageToSave,
+      imageUri: processedImage,
       category: selectedCategory,
       colors: detectedColors,
       addedAt: Date.now(),
@@ -243,6 +242,13 @@ export default function AddItemScreen() {
                     <Text style={styles.processingText}>REMOVING BACKGROUND...</Text>
                   </View>
                 )}
+                {processImageMutation.isError && (
+                  <View style={styles.errorOverlay}>
+                    <Text style={styles.errorIcon}>!</Text>
+                    <Text style={styles.errorText}>Unable to process image</Text>
+                    <Text style={styles.errorSubtext}>Please try again or use a different photo</Text>
+                  </View>
+                )}
               </View>
               <TouchableOpacity style={styles.retakeButton} onPress={handleReset}>
                 <X size={16} color={Colors.gray[500]} />
@@ -294,16 +300,21 @@ export default function AddItemScreen() {
             </View>
 
             <View style={styles.footer}>
+              {processImageMutation.isError && (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorBannerText}>Image processing failed. Please retake or upload a new photo.</Text>
+                </View>
+              )}
               <TouchableOpacity
                 style={[
                   styles.saveButton,
-                  (!capturedImage || !selectedCategory || processImageMutation.isPending) && styles.saveButtonDisabled
+                  (!processedImage || !selectedCategory || processImageMutation.isPending) && styles.saveButtonDisabled
                 ]}
                 onPress={handleSaveItem}
-                disabled={!capturedImage || !selectedCategory || processImageMutation.isPending}
+                disabled={!processedImage || !selectedCategory || processImageMutation.isPending}
               >
                 <LinearGradient
-                  colors={(!capturedImage || !selectedCategory || processImageMutation.isPending) 
+                  colors={(!processedImage || !selectedCategory || processImageMutation.isPending) 
                     ? [Colors.gray[200], Colors.gray[200]] 
                     : [Colors.gold[300], Colors.gold[500]]}
                   style={styles.saveButtonGradient}
@@ -415,6 +426,43 @@ const styles = StyleSheet.create({
     marginTop: 12,
     letterSpacing: 1,
     fontWeight: '600',
+  },
+  errorOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(139, 0, 0, 0.85)',
+  },
+  errorIcon: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: Colors.white,
+    marginBottom: 8,
+  },
+  errorText: {
+    color: Colors.white,
+    fontSize: 12,
+    letterSpacing: 1,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  errorSubtext: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 10,
+    letterSpacing: 0.5,
+  },
+  errorBanner: {
+    backgroundColor: 'rgba(139, 0, 0, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 0, 0, 0.5)',
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorBannerText: {
+    color: '#ff6b6b',
+    fontSize: 11,
+    textAlign: 'center',
+    letterSpacing: 0.5,
   },
   retakeButton: {
     flexDirection: 'row',
