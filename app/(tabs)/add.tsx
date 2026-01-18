@@ -124,11 +124,12 @@ export default function AddItemScreen() {
   };
 
   const handleSaveItem = () => {
-    if (!processedImage || !selectedCategory) return;
+    const imageToSave = processedImage || capturedImage;
+    if (!imageToSave || !selectedCategory) return;
 
     const newItem = {
       id: Date.now().toString(),
-      imageUri: processedImage,
+      imageUri: imageToSave,
       category: selectedCategory,
       colors: detectedColors,
       addedAt: Date.now(),
@@ -296,13 +297,13 @@ export default function AddItemScreen() {
               <TouchableOpacity
                 style={[
                   styles.saveButton,
-                  (!processedImage || !selectedCategory) && styles.saveButtonDisabled
+                  (!capturedImage || !selectedCategory || processImageMutation.isPending) && styles.saveButtonDisabled
                 ]}
                 onPress={handleSaveItem}
-                disabled={!processedImage || !selectedCategory}
+                disabled={!capturedImage || !selectedCategory || processImageMutation.isPending}
               >
                 <LinearGradient
-                  colors={(!processedImage || !selectedCategory) 
+                  colors={(!capturedImage || !selectedCategory || processImageMutation.isPending) 
                     ? [Colors.gray[200], Colors.gray[200]] 
                     : [Colors.gold[300], Colors.gold[500]]}
                   style={styles.saveButtonGradient}
