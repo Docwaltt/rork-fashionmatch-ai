@@ -59,26 +59,38 @@ export default function AddItemScreen() {
 
   const processImageMutation = useMutation({
     mutationFn: async (imageUri: string) => {
+      console.log("[AddItem] Starting image processing...");
+      console.log("[AddItem] Image URI:", imageUri.substring(0, 100) + "...");
+      console.log("[AddItem] User gender:", userProfile?.gender);
+      
       try {
-        // Resize and compress image before sending to cloud function
-        // 800px width is sufficient for classification and background removal
+        console.log("[AddItem] Resizing image...");
         const manipResult = await manipulateAsync(
           imageUri,
           [{ resize: { width: 800 } }],
           { compress: 0.6, format: SaveFormat.JPEG, base64: true }
         );
+        console.log("[AddItem] Image resized, base64 length:", manipResult.base64?.length);
 
-        // Sending base64 string with prefix to match typical expectations for data URLs
+        if (!manipResult.base64) {
+          throw new Error("Failed to convert image to base64");
+        }
+
         const base64Data = `data:image/jpeg;base64,${manipResult.base64}`;
         
+        console.log("[AddItem] Calling backend analyzeImage...");
         const data = await trpcClient.wardrobe.analyzeImage.mutate({
           image: base64Data,
           gender: userProfile?.gender
         });
+        console.log("[AddItem] Backend response:", JSON.stringify(data).substring(0, 200));
 
         return data;
       } catch (e: any) {
-        console.error("Processing failed", e);
+        console.error("[AddItem] Processing failed:", e);
+        console.error("[AddItem] Error name:", e?.name);
+        console.error("[AddItem] Error message:", e?.message);
+        console.error("[AddItem] Error stack:", e?.stack);
         throw new Error(e.message || "Failed to process image");
       }
     },

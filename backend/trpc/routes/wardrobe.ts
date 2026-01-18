@@ -11,7 +11,9 @@ export const wardrobeRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       const { image, gender } = input;
 
-      console.log("Analyzing image via Firebase Cloud Function...", { gender });
+      console.log("[Wardrobe] Starting image analysis...");
+      console.log("[Wardrobe] Gender:", gender);
+      console.log("[Wardrobe] Image length:", image?.length);
 
       const validCategories = gender === 'male' 
         ? MALE_CATEGORIES 
@@ -32,34 +34,43 @@ export const wardrobeRouter = createTRPCRouter({
       // Adjust region if your function is deployed elsewhere
       const functionUrl = `https://us-central1-${projectId}.cloudfunctions.net/processClothingFn`;
       
-      console.log("Calling Firebase function:", functionUrl);
+      console.log("[Wardrobe] Calling Firebase function:", functionUrl);
 
       try {
-        // Strip data URI prefix if present for sending to Firebase
         const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+        console.log("[Wardrobe] Base64 data length (stripped):", base64Data?.length);
+
+        const requestBody = {
+          image: base64Data,
+          gender: gender,
+          validCategories: categoryIds,
+        };
+        console.log("[Wardrobe] Request body keys:", Object.keys(requestBody));
 
         const response = await fetch(functionUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            image: base64Data,
-            gender: gender,
-            validCategories: categoryIds,
-          }),
+          body: JSON.stringify(requestBody),
         });
 
-        console.log("Firebase function response status:", response.status);
+        console.log("[Wardrobe] Firebase response status:", response.status);
+        console.log("[Wardrobe] Firebase response ok:", response.ok);
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error("Firebase function error:", errorText);
-          throw new Error(`Firebase function failed: ${response.status}`);
+          console.error("[Wardrobe] Firebase function error response:", errorText);
+          console.error("[Wardrobe] Status:", response.status);
+          throw new Error(`Firebase function failed (${response.status}): ${errorText.substring(0, 200)}`);
         }
 
         const data = await response.json();
-        console.log("Firebase function response data:", data);
+        console.log("[Wardrobe] Firebase response data keys:", Object.keys(data));
+        console.log("[Wardrobe] Category:", data.category);
+        console.log("[Wardrobe] Color:", data.color || data.dominantColor);
+        console.log("[Wardrobe] Has cleanedImage:", !!data.cleanedImage);
+        console.log("[Wardrobe] Has cleanedImageUrl:", !!data.cleanedImageUrl);
 
         // Handle different response formats from Firebase function
         let cleanedImage: string | null = null;
@@ -99,8 +110,15 @@ export const wardrobeRouter = createTRPCRouter({
         };
 
       } catch (error: any) {
-        console.error("Error calling Firebase function:", error);
-        throw new Error(error.message || "Failed to analyze image. Please check your connection and try again.");
+        console.error("[Wardrobe] Error calling Firebase function:", error);
+        console.error("[Wardrobe] Error name:", error?.name);
+        console.error("[Wardrobe] Error message:", error?.message);
+        
+        if (error?.message?.includes("fetch")) {
+          throw new Error("Unable to connect to image processing service. Please check your internet connection.");
+        }
+        
+        throw new Error(error.message || "Failed to analyze image. Please try again.");
       }
     }),
 });
