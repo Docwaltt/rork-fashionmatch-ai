@@ -83,8 +83,7 @@ export default function AddItemScreen() {
       }
     },
     onSuccess: (data) => {
-      // Data is now directly the response object, no "error" property expected from success path usually
-      // unless we manually return it. tRPC throws on error.
+      console.log("Backend analysis response:", data);
 
       if (data.cleanedImage) {
         // If cleanedImage is a base64 string, ensure it has prefix if missing
@@ -92,19 +91,33 @@ export default function AddItemScreen() {
           ? data.cleanedImage 
           : `data:image/png;base64,${data.cleanedImage}`;
         setProcessedImage(imageSrc);
+      } else {
+        // If no cleaned image returned (e.g. background removal failed), use original
+        setProcessedImage(capturedImage);
       }
       
       if (data.category) {
-        const catLower = data.category.toLowerCase();
-        // Try to match with available categories
-        const matchedCat = categories.find(c => 
-          catLower === c.id.toLowerCase() || 
-          catLower.includes(c.label.toLowerCase()) ||
-          c.label.toLowerCase().includes(catLower)
-        );
+        const returnedCategory = data.category.toLowerCase().trim();
+        console.log("Backend returned category:", returnedCategory);
+
+        // Try exact match first (ID match)
+        let matchedCat = categories.find(c => c.id.toLowerCase() === returnedCategory);
+
+        // If no exact match, try fuzzy match on label or ID
+        if (!matchedCat) {
+            matchedCat = categories.find(c => 
+                returnedCategory.includes(c.id.toLowerCase()) || 
+                returnedCategory.includes(c.label.toLowerCase()) ||
+                c.label.toLowerCase().includes(returnedCategory)
+            );
+        }
         
         if (matchedCat) {
+          console.log("Matched category:", matchedCat.id);
           setSelectedCategory(matchedCat.id as ClothingCategory);
+        } else {
+            console.log("No matching category found for:", returnedCategory);
+            Alert.alert("Category not found", `Detected: ${data.category}. Please select manually.`);
         }
       }
 
@@ -115,6 +128,8 @@ export default function AddItemScreen() {
     onError: (error) => {
        console.log("Error processing image", error);
        Alert.alert("Processing Failed", "Could not analyze the image. Please try again or add manually.");
+       // Allow user to proceed manually with the original image
+       setProcessedImage(capturedImage);
     }
   });
 
