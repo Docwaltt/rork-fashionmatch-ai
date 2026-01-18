@@ -1,5 +1,4 @@
-import { functions } from "@/lib/firebase";
-import { httpsCallable } from "firebase/functions";
+import { trpcClient } from "@/lib/trpc";
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
@@ -69,24 +68,23 @@ export default function AddItemScreen() {
           { compress: 0.6, format: SaveFormat.JPEG, base64: true }
         );
 
-        const processClothing = httpsCallable(functions, 'processClothingFn');
         // Sending base64 string with prefix to match typical expectations for data URLs
-        // and previous implementation attempts.
         const base64Data = `data:image/jpeg;base64,${manipResult.base64}`;
         
-        const { data } = await processClothing({ image: base64Data });
-        return data as { category?: string; color?: string; cleanedImage?: string; error?: string };
+        const data = await trpcClient.wardrobe.analyzeImage.mutate({
+          image: base64Data,
+          gender: userProfile?.gender
+        });
+
+        return data;
       } catch (e: any) {
         console.error("Processing failed", e);
         throw new Error(e.message || "Failed to process image");
       }
     },
     onSuccess: (data) => {
-      if (data.error) {
-        // If the backend returns a soft error
-        console.error("Backend returned error:", data.error);
-        return;
-      }
+      // Data is now directly the response object, no "error" property expected from success path usually
+      // unless we manually return it. tRPC throws on error.
 
       if (data.cleanedImage) {
         // If cleanedImage is a base64 string, ensure it has prefix if missing
