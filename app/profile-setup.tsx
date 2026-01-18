@@ -146,8 +146,17 @@ export default function ProfileSetupScreen() {
       });
 
       if (address) {
-        setCity(address.city || address.subregion || "");
-        setCountry(address.country || "");
+        console.log("[ProfileSetup] Location found:", address);
+        // Try multiple fields for city to ensure we get a value
+        const cityValue = address.city || address.subregion || address.district || address.region || address.name || "";
+        const countryValue = address.country || address.isoCountryCode || "";
+        
+        if (!cityValue) {
+           Alert.alert("Notice", "We couldn't automatically detect your city name, please enter it manually.");
+        }
+
+        setCity(cityValue);
+        setCountry(countryValue);
       }
     } catch (error) {
       console.error("[ProfileSetup] Location error:", error);

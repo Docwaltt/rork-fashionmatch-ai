@@ -30,8 +30,42 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       setFirebaseUser(user);
       
       if (user) {
-        const profile = await fetchUserProfile(user.uid);
-        setUserProfile(profile);
+        let foundLocal = false;
+        // Optimistically check local storage first
+        try {
+          const stored = await AsyncStorage.getItem(USER_PROFILE_KEY);
+          if (stored) {
+            const profile = JSON.parse(stored);
+            // Only use if it matches current user
+            if (profile.id === user.uid) {
+              console.log("[AuthContext] Found cached profile");
+              setUserProfile(profile);
+              foundLocal = true;
+            }
+          }
+        } catch (e) {
+          console.error("[AuthContext] Error reading cached profile", e);
+        }
+        
+        // Then fetch from Firestore
+        // If we didn't find it locally, we MUST wait for the fetch to avoid race conditions
+        // where we redirect to profile setup before checking Firestore.
+        if (!foundLocal) {
+          console.log("[AuthContext] No local profile, waiting for Firestore fetch...");
+          const profile = await fetchUserProfile(user.uid);
+          if (profile) {
+            console.log("[AuthContext] Found profile in Firestore");
+            setUserProfile(profile);
+          } else {
+            console.log("[AuthContext] No profile in Firestore");
+          }
+        } else {
+           // If we found it locally, update in background
+           console.log("[AuthContext] Updating profile in background...");
+           fetchUserProfile(user.uid).then(profile => {
+             if (profile) setUserProfile(profile);
+           });
+        }
       } else {
         setUserProfile(null);
         await AsyncStorage.removeItem(USER_PROFILE_KEY);
@@ -107,11 +141,16 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         updatedAt: now,
       };
       
+      // Firestore throws error if data contains "undefined"
+      // We strip undefined values using JSON serialization
+      const validProfile = JSON.parse(JSON.stringify(profile));
+      
       try {
-        await setDoc(doc(db, "users", firebaseUser.uid), profile);
+        await setDoc(doc(db, "users", firebaseUser.uid), validProfile);
         console.log("[AuthContext] Profile saved to Firestore");
       } catch (firestoreError: any) {
         console.error("[AuthContext] Firestore error:", firestoreError?.code, firestoreError?.message);
+        // We still save locally so user can proceed
         console.log("[AuthContext] Saving profile locally as fallback");
       }
       
