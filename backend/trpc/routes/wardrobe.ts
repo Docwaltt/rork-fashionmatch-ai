@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../create-context";
-import { generateObject } from "@rork-ai/toolkit-sdk";
 import { MALE_CATEGORIES, FEMALE_CATEGORIES } from "@/types/user";
 
 export const wardrobeRouter = createTRPCRouter({
@@ -12,7 +11,7 @@ export const wardrobeRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       const { image, gender } = input;
 
-      console.log("Analyzing image...", { gender });
+      console.log("Analyzing image via Firebase Cloud Function...", { gender });
 
       const validCategories = gender === 'male' 
         ? MALE_CATEGORIES 
@@ -20,91 +19,88 @@ export const wardrobeRouter = createTRPCRouter({
           ? FEMALE_CATEGORIES 
           : [...MALE_CATEGORIES, ...FEMALE_CATEGORIES];
 
-      const categoryLabels = validCategories.map(c => c.label).join(", ");
-      const categoryIds = validCategories.map(c => c.id).join(", ");
+      const categoryIds = validCategories.map(c => c.id);
 
-      // 1. Analyze image using generateObject
-      const schema = z.object({
-        category: z.string().describe(`The specific category of the clothing item. Best match from: ${categoryIds}`),
-        color: z.string().describe("The dominant color of the clothing item"),
-        confidence: z.number().describe("Confidence score between 0 and 1"),
-      });
+      // Get Firebase project ID from environment
+      const projectId = process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID;
+      if (!projectId) {
+        console.error("Firebase project ID not configured");
+        throw new Error("Server configuration error. Please try again later.");
+      }
 
-      const prompt = `Analyze this clothing item. Identify its specific category and its dominant color.
+      // Firebase Cloud Function URL (using default region us-central1)
+      // Adjust region if your function is deployed elsewhere
+      const functionUrl = `https://us-central1-${projectId}.cloudfunctions.net/processClothingFn`;
       
-      Valid categories are:
-      ${categoryLabels}
-      (IDs: ${categoryIds})
-      
-      ${gender ? `The user is ${gender}, so prefer categories relevant to this gender.` : ''}
-      
-      Return the best matching category ID from the list above.
-      If the item is not clear, provide your best guess.
-      `;
+      console.log("Calling Firebase function:", functionUrl);
 
       try {
-        const result = await generateObject({
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: prompt },
-                { type: "image", image: image },
-              ],
-            },
-          ],
-          schema: schema,
+        // Strip data URI prefix if present for sending to Firebase
+        const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+
+        const response = await fetch(functionUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            image: base64Data,
+            gender: gender,
+            validCategories: categoryIds,
+          }),
         });
 
-        console.log("Analysis result:", result);
+        console.log("Firebase function response status:", response.status);
 
-        // 2. Remove background using edit-images API
-        let cleanedImage = image; 
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Firebase function error:", errorText);
+          throw new Error(`Firebase function failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log("Firebase function response data:", data);
+
+        // Handle different response formats from Firebase function
+        let cleanedImage: string | null = null;
         
-        try {
-           // Strip data URI prefix for the edit API if present
-           const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+        if (data.cleanedImage) {
+          // If cleanedImage is already a full data URI or URL
+          cleanedImage = data.cleanedImage.startsWith('data:') || data.cleanedImage.startsWith('http')
+            ? data.cleanedImage
+            : `data:image/png;base64,${data.cleanedImage}`;
+        } else if (data.cleanedImageUrl) {
+          // If the function returns a URL
+          cleanedImage = data.cleanedImageUrl;
+        }
 
-           console.log("Sending request to remove background...");
-           const editResponse = await fetch("https://toolkit.rork.com/images/edit/", {
-             method: "POST",
-             headers: {
-               "Content-Type": "application/json",
-             },
-             body: JSON.stringify({
-               prompt: "Remove the background completely. Keep only the clothing item on a transparent background. High quality, clean edges.",
-               images: [{ type: "image", image: base64Data }],
-               aspectRatio: "1:1", 
-             }),
-           });
-           
-           if (editResponse.ok) {
-             const editData = await editResponse.json();
-             if (editData.image && editData.image.base64Data) {
-               // Add prefix back for the frontend
-               cleanedImage = `data:${editData.image.mimeType};base64,${editData.image.base64Data}`;
-             }
-           } else {
-             const errorText = await editResponse.text();
-             console.error("Failed to edit image:", errorText);
-             // Don't fail the whole request, just return original image
-           }
-        } catch (e) {
-          console.error("Error cleaning image:", e);
+        if (!cleanedImage) {
+          console.error("No cleaned image returned from Firebase function");
+          throw new Error("Image processing failed. No cleaned image returned.");
+        }
+
+        // Validate category against valid options
+        let category = data.category?.toLowerCase()?.trim() || '';
+        if (category && !categoryIds.includes(category)) {
+          // Try to find a close match
+          const matchedCat = categoryIds.find(id => 
+            category.includes(id) || id.includes(category)
+          );
+          if (matchedCat) {
+            category = matchedCat;
+          }
+          console.log("Category mapped:", data.category, "->", category);
         }
 
         return {
-            category: result.category,
-            color: result.color,
-            cleanedImage: cleanedImage,
+          category: category || data.category,
+          color: data.color || data.dominantColor || 'unknown',
+          cleanedImage: cleanedImage,
         };
 
-      } catch (error) {
-        console.error("Error analyzing image:", error);
-        // If analysis fails, we still want to return something if possible, 
-        // but since the user expects auto-categorization, throwing might be better
-        // to trigger the retry/manual flow in frontend.
-        throw new Error("Failed to analyze image. Please try again.");
+      } catch (error: any) {
+        console.error("Error calling Firebase function:", error);
+        throw new Error(error.message || "Failed to analyze image. Please check your connection and try again.");
       }
     }),
 });
