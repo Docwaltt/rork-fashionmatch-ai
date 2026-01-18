@@ -2,10 +2,11 @@ import { functions } from "@/lib/firebase";
 import { httpsCallable } from "firebase/functions";
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { Camera, ImageIcon, X, RefreshCcw } from "lucide-react-native";
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import {
   StyleSheet,
   Text,
@@ -14,7 +15,8 @@ import {
   ScrollView,
   ActivityIndicator,
   StatusBar,
-  Platform
+  Platform,
+  Alert
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useMutation } from "@tanstack/react-query";
@@ -23,19 +25,13 @@ import { BlurView } from "expo-blur";
 
 import Colors from "@/constants/colors";
 import { useWardrobe } from "@/contexts/WardrobeContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { ClothingCategory } from "@/types/wardrobe";
-
-const CATEGORIES: { id: ClothingCategory; label: string; icon: string }[] = [
-  { id: "top", label: "Top", icon: "TOP" },
-  { id: "bottom", label: "Bottom", icon: "BTM" },
-  { id: "dress", label: "Dress", icon: "DRS" },
-  { id: "outerwear", label: "Outer", icon: "OUT" },
-  { id: "shoes", label: "Shoes", icon: "SHS" },
-  { id: "accessories", label: "Accs", icon: "ACS" },
-];
+import { getCategoriesForGender } from "@/types/user";
 
 export default function AddItemScreen() {
   const cameraRef = useRef<CameraView>(null);
+  const { userProfile } = useAuth();
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>("back");
   const [showCamera, setShowCamera] = useState<boolean>(false);
@@ -45,29 +41,72 @@ export default function AddItemScreen() {
   const [detectedColors, setDetectedColors] = useState<string[]>([]);
   const { addItem } = useWardrobe();
 
+    const categories = useMemo(() => {
+    if (userProfile?.gender) {
+      return getCategoriesForGender(userProfile.gender);
+    }
+    // Fallback if profile is missing or loading
+    // Return a default list of common categories to ensure the UI is not empty
+    const fallbackCategories: { id: ClothingCategory; label: string; icon: string }[] = [
+      { id: 'top', label: 'Top', icon: '👕' },
+      { id: 'bottom', label: 'Bottom', icon: '👖' },
+      { id: 'dress', label: 'Dress', icon: '👗' },
+      { id: 'shoes', label: 'Shoes', icon: '👟' },
+      { id: 'outerwear', label: 'Outer', icon: '🧥' },
+      { id: 'accessories', label: 'Accs', icon: '👜' },
+    ];
+    return fallbackCategories;
+  }, [userProfile?.gender]);
+
   const processImageMutation = useMutation({
-    mutationFn: async (imageBase64: string) => {
+    mutationFn: async (imageUri: string) => {
       try {
+        // Resize and compress image before sending to cloud function
+        // 800px width is sufficient for classification and background removal
+        const manipResult = await manipulateAsync(
+          imageUri,
+          [{ resize: { width: 800 } }],
+          { compress: 0.6, format: SaveFormat.JPEG, base64: true }
+        );
+
         const processClothing = httpsCallable(functions, 'processClothingFn');
-        const { data } = await processClothing({ image: imageBase64 });
-        return data as { category?: string; color?: string; cleanedImage?: string };
-      } catch (e) {
+        // Sending base64 string with prefix to match typical expectations for data URLs
+        // and previous implementation attempts.
+        const base64Data = `data:image/jpeg;base64,${manipResult.base64}`;
+        
+        const { data } = await processClothing({ image: base64Data });
+        return data as { category?: string; color?: string; cleanedImage?: string; error?: string };
+      } catch (e: any) {
         console.error("Processing failed", e);
-        throw e;
+        throw new Error(e.message || "Failed to process image");
       }
     },
     onSuccess: (data) => {
+      if (data.error) {
+        // If the backend returns a soft error
+        console.error("Backend returned error:", data.error);
+        return;
+      }
+
       if (data.cleanedImage) {
-        setProcessedImage(data.cleanedImage);
+        // If cleanedImage is a base64 string, ensure it has prefix if missing
+        const imageSrc = data.cleanedImage.startsWith('data:') 
+          ? data.cleanedImage 
+          : `data:image/png;base64,${data.cleanedImage}`;
+        setProcessedImage(imageSrc);
       }
       
       if (data.category) {
         const catLower = data.category.toLowerCase();
-        const matchedCat = CATEGORIES.find(c => 
-          catLower.includes(c.id) || catLower.includes(c.label.toLowerCase())
+        // Try to match with available categories
+        const matchedCat = categories.find(c => 
+          catLower === c.id.toLowerCase() || 
+          catLower.includes(c.label.toLowerCase()) ||
+          c.label.toLowerCase().includes(catLower)
         );
+        
         if (matchedCat) {
-          setSelectedCategory(matchedCat.id);
+          setSelectedCategory(matchedCat.id as ClothingCategory);
         }
       }
 
@@ -77,8 +116,7 @@ export default function AddItemScreen() {
     },
     onError: (error) => {
        console.log("Error processing image", error);
-       // If fails, we still have the captured image, but we don't set processedImage
-       // User can manually select category
+       Alert.alert("Processing Failed", "Could not analyze the image. Please try again or add manually.");
     }
   });
 
@@ -88,38 +126,36 @@ export default function AddItemScreen() {
     try {
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
-        base64: true,
+        skipProcessing: true, // Faster capture
       });
       
       if (photo && photo.uri) {
         setCapturedImage(photo.uri);
         setShowCamera(false);
-        
-        if (photo.base64) {
-          processImageMutation.mutate(`data:image/jpeg;base64,${photo.base64}`);
-        }
+        processImageMutation.mutate(photo.uri);
       }
     } catch (error) {
       console.error("Error taking photo:", error);
+      Alert.alert("Camera Error", "Failed to take photo");
     }
   };
 
   const handlePickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: "images" as const,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-      base64: true,
-    });
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: "images" as const,
+        allowsEditing: true,
+        quality: 0.8,
+      });
 
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      setCapturedImage(asset.uri);
-      
-      if (asset.base64) {
-        processImageMutation.mutate(`data:image/jpeg;base64,${asset.base64}`);
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        setCapturedImage(asset.uri);
+        processImageMutation.mutate(asset.uri);
       }
+    } catch (error) {
+      console.error("Error picking image:", error);
+      Alert.alert("Gallery Error", "Failed to pick image");
     }
   };
 
@@ -281,15 +317,16 @@ export default function AddItemScreen() {
 
               <Text style={styles.sectionTitle}>CATEGORY</Text>
               <View style={styles.categoryGrid}>
-                {CATEGORIES.map((cat) => (
+                {categories.map((cat) => (
                   <TouchableOpacity
                     key={cat.id}
                     style={[
                       styles.categoryChip,
                       selectedCategory === cat.id && styles.categoryChipSelected
                     ]}
-                    onPress={() => setSelectedCategory(cat.id)}
+                    onPress={() => setSelectedCategory(cat.id as ClothingCategory)}
                   >
+                    <Text style={styles.categoryIcon}>{cat.icon}</Text>
                     <Text style={[
                       styles.categoryChipText,
                       selectedCategory === cat.id && styles.categoryChipTextSelected
@@ -492,13 +529,19 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
   },
+  categoryIcon: {
+    fontSize: 20,
+    marginBottom: 8,
+  },
   categoryChip: {
     paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: Colors.gray[200],
     borderRadius: 0,
     backgroundColor: 'transparent',
+    alignItems: 'center',
+    width: '30%',
   },
   categoryChipSelected: {
     borderColor: Colors.gold[400],

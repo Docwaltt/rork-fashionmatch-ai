@@ -8,6 +8,7 @@ import {
   onAuthStateChanged,
   User as FirebaseUser
 } from "firebase/auth";
+import { Alert } from "react-native";
 import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -150,6 +151,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         console.log("[AuthContext] Profile saved to Firestore");
       } catch (firestoreError: any) {
         console.error("[AuthContext] Firestore error:", firestoreError?.code, firestoreError?.message);
+        Alert.alert("Profile Save Error", `Failed to save profile to cloud: ${firestoreError?.message}. Saving locally only.`);
         // We still save locally so user can proceed
         console.log("[AuthContext] Saving profile locally as fallback");
       }

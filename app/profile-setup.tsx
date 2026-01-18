@@ -136,7 +136,9 @@ export default function ProfileSetupScreen() {
         return;
       }
 
-      const location = await Location.getCurrentPositionAsync({});
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
       const { latitude, longitude } = location.coords;
       setCoordinates({ latitude, longitude });
 
@@ -151,12 +153,12 @@ export default function ProfileSetupScreen() {
         const cityValue = address.city || address.subregion || address.district || address.region || address.name || "";
         const countryValue = address.country || address.isoCountryCode || "";
         
-        if (!cityValue) {
+        if (!cityValue && !city && !country) {
            Alert.alert("Notice", "We couldn't automatically detect your city name, please enter it manually.");
         }
 
-        setCity(cityValue);
-        setCountry(countryValue);
+        if (cityValue) setCity(cityValue);
+        if (countryValue) setCountry(countryValue);
       }
     } catch (error) {
       console.error("[ProfileSetup] Location error:", error);
