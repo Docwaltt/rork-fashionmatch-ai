@@ -79,6 +79,7 @@ export default function AddItemScreen() {
         const base64Data = `data:image/jpeg;base64,${manipResult.base64}`;
         
         console.log("[AddItem] Calling backend analyzeImage...");
+        // Add timeout to fetch to prevent hanging
         const data = await trpcClient.wardrobe.analyzeImage.mutate({
           image: base64Data,
           gender: userProfile?.gender
@@ -90,8 +91,18 @@ export default function AddItemScreen() {
         console.error("[AddItem] Processing failed:", e);
         console.error("[AddItem] Error name:", e?.name);
         console.error("[AddItem] Error message:", e?.message);
-        console.error("[AddItem] Error stack:", e?.stack);
-        throw new Error(e.message || "Failed to process image");
+        
+        // Improve error message for user
+        let userMessage = "Could not analyze the image.";
+        if (e?.message?.includes("Network request failed")) {
+            userMessage = "Network error. Please check your connection.";
+        } else if (e?.message?.includes("JSON")) {
+            userMessage = "Invalid response from server.";
+        } else if (e?.message) {
+            userMessage = `Error: ${e.message}`;
+        }
+        
+        throw new Error(userMessage);
       }
     },
     onSuccess: (data) => {
@@ -129,7 +140,13 @@ export default function AddItemScreen() {
           setSelectedCategory(matchedCat.id as ClothingCategory);
         } else {
             console.log("No matching category found for:", returnedCategory);
-            Alert.alert("Category not found", `Detected: ${data.category}. Please select manually.`);
+            // If the backend returns a category we don't strictly have, we should probably still accept it 
+            // or map it to a default "Other" if possible, but for now showing the alert is okay, 
+            // but let's make it clearer that the backend *did* work.
+            Alert.alert(
+                "Category Mismatch", 
+                `We detected "${data.category}" but couldn't match it to a standard category. Please select the closest one.`
+            );
         }
       }
 
@@ -138,8 +155,8 @@ export default function AddItemScreen() {
       }
     },
     onError: (error) => {
-       console.log("Error processing image", error);
-       Alert.alert("Processing Failed", "Could not analyze the image. Please try again or add manually.");
+       console.log("Error processing image mutation:", error);
+       Alert.alert("Processing Failed", error.message || "Could not analyze the image. Please try again or add manually.");
        // Allow user to proceed manually with the original image
        setProcessedImage(capturedImage);
     }

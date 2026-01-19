@@ -111,20 +111,25 @@ export default function ProfileSetupScreen() {
       setIsLoadingLocation(true);
 
       if (Platform.OS === "web") {
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            async (position) => {
-              const { latitude, longitude } = position.coords;
-              setCoordinates({ latitude, longitude });
-              setCity("Your City");
-              setCountry("Your Country");
-              setIsLoadingLocation(false);
-            },
-            () => {
-              setIsLoadingLocation(false);
-              Alert.alert("Error", "Failed to get location");
-            }
-          );
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== 'granted') {
+             Alert.alert("Permission Required", "Location access is needed");
+             setIsLoadingLocation(false);
+             return;
+          }
+
+          const location = await Location.getCurrentPositionAsync({});
+          const { latitude, longitude } = location.coords;
+          setCoordinates({ latitude, longitude });
+          
+          // Reverse geocoding is often not supported or limited on web
+          // We'll leave city/country empty for manual entry to avoid bad data
+          setIsLoadingLocation(false);
+        } catch (error) {
+           console.error("Web location error:", error);
+           setIsLoadingLocation(false);
+           Alert.alert("Error", "Failed to get location");
         }
         return;
       }

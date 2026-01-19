@@ -150,8 +150,17 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         await setDoc(doc(db, "users", firebaseUser.uid), validProfile);
         console.log("[AuthContext] Profile saved to Firestore");
       } catch (firestoreError: any) {
-        console.error("[AuthContext] Firestore error:", firestoreError?.code, firestoreError?.message);
-        Alert.alert("Profile Save Error", `Failed to save profile to cloud: ${firestoreError?.message}. Saving locally only.`);
+        console.error("[AuthContext] Firestore error details:", firestoreError);
+        console.error("[AuthContext] Firestore error code:", firestoreError?.code);
+        console.error("[AuthContext] Firestore error message:", firestoreError?.message);
+        
+        // If it's a permission error, it might mean the user is not authenticated correctly in Firestore rules
+        // or the rules are too restrictive.
+        
+        Alert.alert(
+            "Sync Error", 
+            `Profile saved locally but failed to sync to cloud: ${firestoreError?.message || 'Unknown error'}. You may need to update your profile later.`
+        );
         // We still save locally so user can proceed
         console.log("[AuthContext] Saving profile locally as fallback");
       }
