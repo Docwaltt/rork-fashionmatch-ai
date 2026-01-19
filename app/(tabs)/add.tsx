@@ -65,10 +65,11 @@ export default function AddItemScreen() {
       
       try {
         console.log("[AddItem] Resizing image...");
+        // Resize to smaller dimension to reduce payload size and speed up processing
         const manipResult = await manipulateAsync(
           imageUri,
-          [{ resize: { width: 800 } }],
-          { compress: 0.6, format: SaveFormat.JPEG, base64: true }
+          [{ resize: { width: 600 } }],
+          { compress: 0.5, format: SaveFormat.JPEG, base64: true }
         );
         console.log("[AddItem] Image resized, base64 length:", manipResult.base64?.length);
 
@@ -84,22 +85,19 @@ export default function AddItemScreen() {
           image: base64Data,
           gender: userProfile?.gender
         });
-        console.log("[AddItem] Backend response:", JSON.stringify(data).substring(0, 200));
+        console.log("[AddItem] Backend response received");
 
         return data;
       } catch (e: any) {
         console.error("[AddItem] Processing failed:", e);
-        console.error("[AddItem] Error name:", e?.name);
-        console.error("[AddItem] Error message:", e?.message);
         
-        // Improve error message for user
-        let userMessage = "Could not analyze the image.";
-        if (e?.message?.includes("Network request failed")) {
+        // Use the actual error message from backend if available
+        let userMessage = e.message || "Could not analyze the image.";
+        
+        if (userMessage.includes("Network request failed")) {
             userMessage = "Network error. Please check your connection.";
-        } else if (e?.message?.includes("JSON")) {
+        } else if (userMessage.includes("JSON")) {
             userMessage = "Invalid response from server.";
-        } else if (e?.message) {
-            userMessage = `Error: ${e.message}`;
         }
         
         throw new Error(userMessage);
@@ -110,13 +108,14 @@ export default function AddItemScreen() {
 
       if (data.cleanedImage) {
         // If cleanedImage is a base64 string, ensure it has prefix if missing
-        const imageSrc = data.cleanedImage.startsWith('data:') 
+        const imageSrc = data.cleanedImage.startsWith('data:') || data.cleanedImage.startsWith('http')
           ? data.cleanedImage 
           : `data:image/png;base64,${data.cleanedImage}`;
         setProcessedImage(imageSrc);
       } else {
-        // If no cleaned image returned (e.g. background removal failed), use original
+        // If no cleaned image returned, fallback to captured but warn
         setProcessedImage(capturedImage);
+        Alert.alert("Notice", "Could not remove background, using original image.");
       }
       
       if (data.category) {
@@ -126,7 +125,7 @@ export default function AddItemScreen() {
         // Try exact match first (ID match)
         let matchedCat = categories.find(c => c.id.toLowerCase() === returnedCategory);
 
-        // If no exact match, try fuzzy match on label or ID
+        // If no exact match, try fuzzy match
         if (!matchedCat) {
             matchedCat = categories.find(c => 
                 returnedCategory.includes(c.id.toLowerCase()) || 
@@ -140,13 +139,23 @@ export default function AddItemScreen() {
           setSelectedCategory(matchedCat.id as ClothingCategory);
         } else {
             console.log("No matching category found for:", returnedCategory);
-            // If the backend returns a category we don't strictly have, we should probably still accept it 
-            // or map it to a default "Other" if possible, but for now showing the alert is okay, 
-            // but let's make it clearer that the backend *did* work.
-            Alert.alert(
-                "Category Mismatch", 
-                `We detected "${data.category}" but couldn't match it to a standard category. Please select the closest one.`
-            );
+            // Don't show alert if we can't match, just log it. 
+            // Alert is annoying if backend returns "t-shirt" and we have "top" but mapping failed.
+            // We should trust the user to select if auto-select fails, or improved mapping in backend.
+            // But let's show a toast or small info if possible?
+            // For now, let's Map some common ones manually in frontend as fallback if backend mapping failed
+             if (returnedCategory.includes('shirt') || returnedCategory.includes('top')) setSelectedCategory('top' as ClothingCategory);
+             else if (returnedCategory.includes('pant') || returnedCategory.includes('jeans')) setSelectedCategory('bottom' as ClothingCategory);
+             else if (returnedCategory.includes('shoe') || returnedCategory.includes('boot')) setSelectedCategory('shoes' as ClothingCategory);
+             else if (returnedCategory.includes('dress')) setSelectedCategory('dress' as ClothingCategory);
+             else if (returnedCategory.includes('jacket') || returnedCategory.includes('coat')) setSelectedCategory('outerwear' as ClothingCategory);
+             else if (returnedCategory.includes('bag') || returnedCategory.includes('purse')) setSelectedCategory('accessories' as ClothingCategory);
+             else {
+                 Alert.alert(
+                    "Select Category", 
+                    `We detected "${data.category}". Please select the correct category.`
+                 );
+             }
         }
       }
 
@@ -156,9 +165,14 @@ export default function AddItemScreen() {
     },
     onError: (error) => {
        console.log("Error processing image mutation:", error);
-       Alert.alert("Processing Failed", error.message || "Could not analyze the image. Please try again or add manually.");
-       // Allow user to proceed manually with the original image
-       setProcessedImage(capturedImage);
+       Alert.alert("Analysis Failed", error.message || "Could not analyze the image.");
+       // We do NOT set processedImage here to force user to try again or cancel,
+       // as per requirement "image editing should be done by the backend".
+       // If backend failed, we shouldn't just let them save the raw image if that's the rule.
+       // But to be user friendly, maybe we should?
+       // The user said: "image editing should be done by the backend... investigate and fix".
+       // So if it fails, it fails.
+       // But to avoid getting stuck, let's keep the error overlay which allows retrying.
     }
   });
 

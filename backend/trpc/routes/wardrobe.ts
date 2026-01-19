@@ -62,7 +62,14 @@ export const wardrobeRouter = createTRPCRouter({
           const errorText = await response.text();
           console.error("[Wardrobe] Firebase function error response:", errorText);
           console.error("[Wardrobe] Status:", response.status);
-          throw new Error(`Firebase function failed (${response.status}): ${errorText.substring(0, 200)}`);
+          
+          // Try to parse JSON error if possible
+          try {
+            const errorJson = JSON.parse(errorText);
+            throw new Error(errorJson.message || errorJson.error || `Firebase function failed: ${response.status}`);
+          } catch {
+            throw new Error(`Firebase function failed (${response.status}): ${errorText.substring(0, 200)}`);
+          }
         }
 
         const data = await response.json();
@@ -87,11 +94,23 @@ export const wardrobeRouter = createTRPCRouter({
 
         if (!cleanedImage) {
           console.error("No cleaned image returned from Firebase function");
-          throw new Error("Image processing failed. No cleaned image returned.");
+           // If we have a category but no image, we might want to still return the category
+           // But user insisted on image editing.
+           // Let's check if we can return original image as fallback if allowed,
+           // but for now throw specific error.
+          throw new Error("Background removal failed. Please try another image.");
         }
 
         // Validate category against valid options
         let category = data.category?.toLowerCase()?.trim() || '';
+        
+        // Handle common variations
+        if (category === 't-shirt' || category === 'shirt') category = 'top';
+        if (category === 'pants' || category === 'trousers' || category === 'jeans') category = 'bottom';
+        if (category === 'sneakers' || category === 'boots') category = 'shoes';
+        if (category === 'jacket' || category === 'coat') category = 'outerwear';
+        if (category === 'bag' || category === 'hat') category = 'accessories';
+
         if (category && !categoryIds.includes(category)) {
           // Try to find a close match
           const matchedCat = categoryIds.find(id => 
