@@ -25,9 +25,15 @@ export const wardrobeRouter = createTRPCRouter({
 
       // Get Firebase project ID from environment
       const projectId = process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID;
+      console.log("[Wardrobe] Firebase Project ID:", projectId ? `${projectId.substring(0, 10)}...` : "NOT SET");
+      console.log("[Wardrobe] All FIREBASE env vars:", {
+        hasProjectId: !!process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+        hasApiKey: !!process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+      });
+      
       if (!projectId) {
-        console.error("Firebase project ID not configured");
-        throw new Error("Server configuration error. Please try again later.");
+        console.error("[Wardrobe] Firebase project ID not configured");
+        throw new Error("Firebase Project ID not configured. Please set EXPO_PUBLIC_FIREBASE_PROJECT_ID.");
       }
 
       // Firebase Cloud Function URL (using default region us-central1)
@@ -47,6 +53,7 @@ export const wardrobeRouter = createTRPCRouter({
         };
         console.log("[Wardrobe] Request body keys:", Object.keys(requestBody));
 
+        console.log("[Wardrobe] Sending request to Firebase...");
         const response = await fetch(functionUrl, {
           method: "POST",
           headers: {
@@ -62,14 +69,28 @@ export const wardrobeRouter = createTRPCRouter({
           const errorText = await response.text();
           console.error("[Wardrobe] Firebase function error response:", errorText);
           console.error("[Wardrobe] Status:", response.status);
+          console.error("[Wardrobe] URL called:", functionUrl);
           
           // Try to parse JSON error if possible
+          let errorMessage = `Firebase function failed (${response.status})`;
           try {
             const errorJson = JSON.parse(errorText);
-            throw new Error(errorJson.message || errorJson.error || `Firebase function failed: ${response.status}`);
+            console.error("[Wardrobe] Error JSON:", errorJson);
+            errorMessage = errorJson.error?.message || errorJson.message || errorJson.error || errorMessage;
           } catch {
-            throw new Error(`Firebase function failed (${response.status}): ${errorText.substring(0, 200)}`);
+            errorMessage = `${errorMessage}: ${errorText.substring(0, 200)}`;
           }
+          
+          // Provide user-friendly messages based on status
+          if (response.status === 400) {
+            throw new Error(`Invalid request to Firebase: ${errorMessage}. Check function parameters.`);
+          } else if (response.status === 404) {
+            throw new Error("Firebase function 'processClothingFn' not found. Please deploy the function.");
+          } else if (response.status === 500) {
+            throw new Error("Firebase function error. Check Cloud Function logs.");
+          }
+          
+          throw new Error(errorMessage);
         }
 
         const data = await response.json();

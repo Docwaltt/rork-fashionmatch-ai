@@ -4,7 +4,7 @@ import * as ImagePicker from "expo-image-picker";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Camera, ImageIcon, X, RefreshCcw } from "lucide-react-native";
+import { Camera, ImageIcon, X, RefreshCcw, RotateCcw } from "lucide-react-native";
 import { useState, useRef, useMemo } from "react";
 import {
   StyleSheet,
@@ -338,7 +338,19 @@ export default function AddItemScreen() {
                   <View style={styles.errorOverlay}>
                     <Text style={styles.errorIcon}>!</Text>
                     <Text style={styles.errorText}>Unable to process image</Text>
-                    <Text style={styles.errorSubtext}>Please try again or use a different photo</Text>
+                    <Text style={styles.errorSubtext}>{processImageMutation.error?.message || 'Please try again'}</Text>
+                    <TouchableOpacity 
+                      style={styles.retryButton} 
+                      onPress={() => {
+                        if (capturedImage) {
+                          processImageMutation.reset();
+                          processImageMutation.mutate(capturedImage);
+                        }
+                      }}
+                    >
+                      <RotateCcw size={16} color={Colors.white} />
+                      <Text style={styles.retryButtonText}>TRY AGAIN</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
@@ -395,7 +407,19 @@ export default function AddItemScreen() {
             <View style={styles.footer}>
               {processImageMutation.isError && (
                 <View style={styles.errorBanner}>
-                  <Text style={styles.errorBannerText}>Image processing failed. Please retake or upload a new photo.</Text>
+                  <Text style={styles.errorBannerText}>{processImageMutation.error?.message || 'Image processing failed.'}</Text>
+                  <TouchableOpacity 
+                    style={styles.errorBannerRetry} 
+                    onPress={() => {
+                      if (capturedImage) {
+                        processImageMutation.reset();
+                        processImageMutation.mutate(capturedImage);
+                      }
+                    }}
+                  >
+                    <RotateCcw size={14} color={Colors.gold[400]} />
+                    <Text style={styles.errorBannerRetryText}>RETRY</Text>
+                  </TouchableOpacity>
                 </View>
               )}
               <TouchableOpacity
@@ -543,6 +567,25 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
     fontSize: 10,
     letterSpacing: 0.5,
+    marginBottom: 16,
+    textAlign: 'center' as const,
+    paddingHorizontal: 16,
+  },
+  retryButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  retryButtonText: {
+    color: Colors.white,
+    fontSize: 12,
+    fontWeight: '600' as const,
+    letterSpacing: 1,
   },
   errorBanner: {
     backgroundColor: 'rgba(139, 0, 0, 0.2)',
@@ -554,8 +597,26 @@ const styles = StyleSheet.create({
   errorBannerText: {
     color: '#ff6b6b',
     fontSize: 11,
-    textAlign: 'center',
+    textAlign: 'center' as const,
     letterSpacing: 0.5,
+    marginBottom: 12,
+  },
+  errorBannerRetry: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: Colors.gold[400],
+    alignSelf: 'center' as const,
+  },
+  errorBannerRetryText: {
+    color: Colors.gold[400],
+    fontSize: 11,
+    fontWeight: '600' as const,
+    letterSpacing: 1,
   },
   retakeButton: {
     flexDirection: 'row',
