@@ -23,22 +23,8 @@ export const wardrobeRouter = createTRPCRouter({
 
       const categoryIds = validCategories.map(c => c.id);
 
-      // Get Firebase project ID from environment
-      const projectId = process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID;
-      console.log("[Wardrobe] Firebase Project ID:", projectId ? `${projectId.substring(0, 10)}...` : "NOT SET");
-      console.log("[Wardrobe] All FIREBASE env vars:", {
-        hasProjectId: !!process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-        hasApiKey: !!process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-      });
-      
-      if (!projectId) {
-        console.error("[Wardrobe] Firebase project ID not configured");
-        throw new Error("Firebase Project ID not configured. Please set EXPO_PUBLIC_FIREBASE_PROJECT_ID.");
-      }
-
-      // Firebase Cloud Function URL (using default region us-central1)
-      // Adjust region if your function is deployed elsewhere
-      const functionUrl = `https://us-central1-${projectId}.cloudfunctions.net/processClothingFn`;
+      // Firebase Cloud Run URL for processClothingFn (onRequest HTTP function)
+      const functionUrl = "https://processclothingfn-pfc64ufnsq-uc.a.run.app";
       
       console.log("[Wardrobe] Calling Firebase function:", functionUrl);
 
