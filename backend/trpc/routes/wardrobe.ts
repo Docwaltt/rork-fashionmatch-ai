@@ -99,32 +99,46 @@ export const wardrobeRouter = createTRPCRouter({
         }
 
         const data = await response.json();
-        console.log("[Wardrobe] Firebase response data keys:", Object.keys(data));
+        console.log("[Wardrobe] ===== FIREBASE SUCCESS RESPONSE =====");
+        console.log("[Wardrobe] Full response data:", JSON.stringify(data, null, 2).substring(0, 1000));
+        console.log("[Wardrobe] Response data keys:", Object.keys(data));
         console.log("[Wardrobe] Category:", data.category);
         console.log("[Wardrobe] Color:", data.color || data.dominantColor);
-        console.log("[Wardrobe] Has cleanedImage:", !!data.cleanedImage);
-        console.log("[Wardrobe] Has cleanedImageUrl:", !!data.cleanedImageUrl);
+        console.log("[Wardrobe] cleanedImage present:", !!data.cleanedImage, "- length:", data.cleanedImage?.length || 0);
+        console.log("[Wardrobe] cleanedImageUrl present:", !!data.cleanedImageUrl);
+        console.log("[Wardrobe] processedImage present:", !!data.processedImage);
+        console.log("[Wardrobe] image present:", !!data.image);
+        console.log("[Wardrobe] ===== END FIREBASE SUCCESS RESPONSE =====");
 
         // Handle different response formats from Firebase function
+        // Check multiple possible field names the backend might use
         let cleanedImage: string | null = null;
+        const possibleImageFields = ['cleanedImage', 'cleanedImageUrl', 'processedImage', 'image', 'resultImage', 'outputImage'];
         
-        if (data.cleanedImage) {
-          // If cleanedImage is already a full data URI or URL
-          cleanedImage = data.cleanedImage.startsWith('data:') || data.cleanedImage.startsWith('http')
-            ? data.cleanedImage
-            : `data:image/png;base64,${data.cleanedImage}`;
-        } else if (data.cleanedImageUrl) {
-          // If the function returns a URL
-          cleanedImage = data.cleanedImageUrl;
+        for (const field of possibleImageFields) {
+          if (data[field] && typeof data[field] === 'string' && data[field].length > 100) {
+            const imgData = data[field];
+            cleanedImage = imgData.startsWith('data:') || imgData.startsWith('http')
+              ? imgData
+              : `data:image/png;base64,${imgData}`;
+            console.log(`[Wardrobe] Found cleaned image in field: ${field}`);
+            break;
+          }
         }
 
         if (!cleanedImage) {
-          console.error("No cleaned image returned from Firebase function");
-           // If we have a category but no image, we might want to still return the category
-           // But user insisted on image editing.
-           // Let's check if we can return original image as fallback if allowed,
-           // but for now throw specific error.
-          throw new Error("Background removal failed. Please try another image.");
+          console.error("[Wardrobe] No cleaned image found in any expected field");
+          console.error("[Wardrobe] Available fields:", Object.keys(data));
+          console.error("[Wardrobe] Field values (truncated):", Object.entries(data).map(([k, v]) => 
+            `${k}: ${typeof v === 'string' ? v.substring(0, 50) + '...' : typeof v}`
+          ));
+          // Return null for cleanedImage - frontend will handle fallback
+          return {
+            category: data.category?.toLowerCase()?.trim() || 'unknown',
+            color: data.color || data.dominantColor || 'unknown',
+            cleanedImage: null,
+            backgroundRemovalFailed: true,
+          };
         }
 
         // Validate category against valid options

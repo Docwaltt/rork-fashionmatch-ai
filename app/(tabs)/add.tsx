@@ -122,17 +122,25 @@ export default function AddItemScreen() {
         throw new Error(userMessage);
       }
     },
-    onSuccess: (data) => {
+    onSuccess: (data: { cleanedImage: string | null; category?: string; color?: string; backgroundRemovalFailed?: boolean }) => {
       console.log("Backend analysis response:", data);
+      console.log("[AddItem] cleanedImage present:", !!data.cleanedImage);
+      console.log("[AddItem] backgroundRemovalFailed:", data.backgroundRemovalFailed);
 
       if (data.cleanedImage) {
-        // If cleanedImage is a base64 string, ensure it has prefix if missing
         const imageSrc = data.cleanedImage.startsWith('data:') || data.cleanedImage.startsWith('http')
           ? data.cleanedImage 
           : `data:image/png;base64,${data.cleanedImage}`;
         setProcessedImage(imageSrc);
+      } else if (data.backgroundRemovalFailed) {
+        console.log("[AddItem] Background removal failed, using original image as fallback");
+        setProcessedImage(capturedImage);
+        Alert.alert(
+          "Background Removal Unavailable", 
+          "We couldn't remove the background but detected your item. You can still save it with the original image.",
+          [{ text: "OK" }]
+        );
       } else {
-        // If no cleaned image returned, fallback to captured but warn
         setProcessedImage(capturedImage);
         Alert.alert("Notice", "Could not remove background, using original image.");
       }
