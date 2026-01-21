@@ -68,8 +68,8 @@ export default function AddItemScreen() {
         // Resize to smaller dimension to reduce payload size and speed up processing
         const manipResult = await manipulateAsync(
           imageUri,
-          [{ resize: { width: 600 } }],
-          { compress: 0.5, format: SaveFormat.JPEG, base64: true }
+          [{ resize: { width: 400 } }],
+          { compress: 0.4, format: SaveFormat.JPEG, base64: true }
         );
         console.log("[AddItem] Image resized, base64 length:", manipResult.base64?.length);
 
@@ -78,14 +78,26 @@ export default function AddItemScreen() {
         }
 
         const base64Data = `data:image/jpeg;base64,${manipResult.base64}`;
+        console.log("[AddItem] Base64 data prepared, total length:", base64Data.length);
         
         console.log("[AddItem] Calling backend analyzeImage...");
-        // Add timeout to fetch to prevent hanging
-        const data = await trpcClient.wardrobe.analyzeImage.mutate({
-          image: base64Data,
-          gender: userProfile?.gender
+        console.log("[AddItem] Timestamp:", new Date().toISOString());
+        
+        // Create a timeout promise
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error("Request timed out. The server is taking too long to respond.")), 60000);
         });
-        console.log("[AddItem] Backend response received");
+        
+        // Race between the actual request and timeout
+        const data = await Promise.race([
+          trpcClient.wardrobe.analyzeImage.mutate({
+            image: base64Data,
+            gender: userProfile?.gender
+          }),
+          timeoutPromise
+        ]) as { cleanedImage: string | null; category?: string; color?: string; backgroundRemovalFailed?: boolean };
+        
+        console.log("[AddItem] Backend response received at:", new Date().toISOString());
 
         return data;
       } catch (e: any) {
@@ -95,6 +107,7 @@ export default function AddItemScreen() {
         console.error("[AddItem] Error name:", e?.name);
         console.error("[AddItem] Error data:", e?.data);
         console.error("[AddItem] Error shape:", e?.shape);
+        console.error("[AddItem] Error cause:", e?.cause);
         console.error("[AddItem] ===== END PROCESSING ERROR =====");
         
         // Extract the actual error message from tRPC error
@@ -112,8 +125,10 @@ export default function AddItemScreen() {
         }
         
         // Clean up common error patterns
-        if (userMessage.includes("Network request failed") || userMessage.includes("fetch failed")) {
-          userMessage = "Network error. Please check your connection.";
+        if (userMessage === "Failed to fetch" || userMessage.includes("Network request failed") || userMessage.includes("fetch failed")) {
+          userMessage = "Network error. Please check your connection and try again.";
+        } else if (userMessage.includes("timed out")) {
+          userMessage = "Request timed out. Please try again with a smaller image.";
         } else if (userMessage.includes("JSON")) {
           userMessage = "Invalid response from server.";
         }
