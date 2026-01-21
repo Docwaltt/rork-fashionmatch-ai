@@ -40,6 +40,8 @@ export const wardrobeRouter = createTRPCRouter({
         console.log("[Wardrobe] Request body keys:", Object.keys(requestBody));
 
         console.log("[Wardrobe] Sending request to Firebase...");
+        console.log("[Wardrobe] Request payload size:", JSON.stringify(requestBody).length, "bytes");
+        
         const response = await fetch(functionUrl, {
           method: "POST",
           headers: {
@@ -51,29 +53,46 @@ export const wardrobeRouter = createTRPCRouter({
         console.log("[Wardrobe] Firebase response status:", response.status);
         console.log("[Wardrobe] Firebase response ok:", response.ok);
 
+        console.log("[Wardrobe] Response headers:", Object.fromEntries(response.headers.entries()));
+        
         if (!response.ok) {
           const errorText = await response.text();
-          console.error("[Wardrobe] Firebase function error response:", errorText);
+          console.error("[Wardrobe] ===== FIREBASE ERROR =====");
           console.error("[Wardrobe] Status:", response.status);
+          console.error("[Wardrobe] Status Text:", response.statusText);
           console.error("[Wardrobe] URL called:", functionUrl);
+          console.error("[Wardrobe] Raw error response:", errorText);
           
           // Try to parse JSON error if possible
           let errorMessage = `Firebase function failed (${response.status})`;
+          let errorDetails = '';
           try {
             const errorJson = JSON.parse(errorText);
-            console.error("[Wardrobe] Error JSON:", errorJson);
-            errorMessage = errorJson.error?.message || errorJson.message || errorJson.error || errorMessage;
+            console.error("[Wardrobe] Parsed error JSON:", JSON.stringify(errorJson, null, 2));
+            errorDetails = errorJson.error?.message || errorJson.message || errorJson.error || errorJson.details || '';
+            if (typeof errorDetails === 'object') {
+              errorDetails = JSON.stringify(errorDetails);
+            }
+            errorMessage = errorDetails || errorMessage;
           } catch {
-            errorMessage = `${errorMessage}: ${errorText.substring(0, 200)}`;
+            errorDetails = errorText.substring(0, 300);
+            console.error("[Wardrobe] Could not parse error as JSON, raw text:", errorDetails);
           }
+          console.error("[Wardrobe] ===== END FIREBASE ERROR =====");
           
           // Provide user-friendly messages based on status
           if (response.status === 400) {
-            throw new Error(`Invalid request to Firebase: ${errorMessage}. Check function parameters.`);
+            throw new Error(`Bad request: ${errorMessage}`);
+          } else if (response.status === 401 || response.status === 403) {
+            throw new Error("Authentication error with Firebase function.");
           } else if (response.status === 404) {
-            throw new Error("Firebase function 'processClothingFn' not found. Please deploy the function.");
+            throw new Error("Firebase function 'processClothingFn' not found.");
+          } else if (response.status === 413) {
+            throw new Error("Image too large. Please use a smaller image.");
           } else if (response.status === 500) {
-            throw new Error("Firebase function error. Check Cloud Function logs.");
+            throw new Error(`Server error: ${errorMessage}`);
+          } else if (response.status === 502 || response.status === 503) {
+            throw new Error("Firebase function temporarily unavailable. Try again.");
           }
           
           throw new Error(errorMessage);
@@ -136,15 +155,24 @@ export const wardrobeRouter = createTRPCRouter({
         };
 
       } catch (error: any) {
-        console.error("[Wardrobe] Error calling Firebase function:", error);
+        console.error("[Wardrobe] ===== CATCH BLOCK ERROR =====");
+        console.error("[Wardrobe] Error type:", typeof error);
         console.error("[Wardrobe] Error name:", error?.name);
         console.error("[Wardrobe] Error message:", error?.message);
+        console.error("[Wardrobe] Error stack:", error?.stack);
+        console.error("[Wardrobe] Full error:", JSON.stringify(error, Object.getOwnPropertyNames(error || {}), 2));
+        console.error("[Wardrobe] ===== END CATCH BLOCK =====");
         
-        if (error?.message?.includes("fetch")) {
-          throw new Error("Unable to connect to image processing service. Please check your internet connection.");
+        // Re-throw if it's already a processed error from above
+        if (error?.message && !error?.message?.includes("fetch failed")) {
+          throw error;
         }
         
-        throw new Error(error.message || "Failed to analyze image. Please try again.");
+        if (error?.message?.includes("fetch") || error?.name === "TypeError") {
+          throw new Error("Network error: Unable to reach image processing service.");
+        }
+        
+        throw new Error(error?.message || "Failed to analyze image. Please try again.");
       }
     }),
 });

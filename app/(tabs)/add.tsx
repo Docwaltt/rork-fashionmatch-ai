@@ -89,17 +89,36 @@ export default function AddItemScreen() {
 
         return data;
       } catch (e: any) {
-        console.error("[AddItem] Processing failed:", e);
+        console.error("[AddItem] ===== PROCESSING ERROR =====");
+        console.error("[AddItem] Error object:", e);
+        console.error("[AddItem] Error message:", e?.message);
+        console.error("[AddItem] Error name:", e?.name);
+        console.error("[AddItem] Error data:", e?.data);
+        console.error("[AddItem] Error shape:", e?.shape);
+        console.error("[AddItem] ===== END PROCESSING ERROR =====");
         
-        // Use the actual error message from backend if available
-        let userMessage = e.message || "Could not analyze the image.";
+        // Extract the actual error message from tRPC error
+        let userMessage = "Could not analyze the image.";
         
-        if (userMessage.includes("Network request failed")) {
-            userMessage = "Network error. Please check your connection.";
-        } else if (userMessage.includes("JSON")) {
-            userMessage = "Invalid response from server.";
+        // tRPC wraps errors - try to get the actual message
+        if (e?.message) {
+          userMessage = e.message;
+        }
+        if (e?.data?.message) {
+          userMessage = e.data.message;
+        }
+        if (e?.shape?.message) {
+          userMessage = e.shape.message;
         }
         
+        // Clean up common error patterns
+        if (userMessage.includes("Network request failed") || userMessage.includes("fetch failed")) {
+          userMessage = "Network error. Please check your connection.";
+        } else if (userMessage.includes("JSON")) {
+          userMessage = "Invalid response from server.";
+        }
+        
+        console.error("[AddItem] Final user message:", userMessage);
         throw new Error(userMessage);
       }
     },
