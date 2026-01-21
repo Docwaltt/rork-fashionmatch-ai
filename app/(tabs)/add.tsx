@@ -1,9 +1,9 @@
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system/legacy";
+import * as ImageManipulator from "expo-image-manipulator";
 import { Image } from "expo-image";
 import { router, useRouter } from "expo-router";
-import { Camera, ImageIcon, X, RefreshCcw, Loader2 } from "lucide-react-native";
+import { Camera, ImageIcon, X, RefreshCcw, Loader2, AlertCircle } from "lucide-react-native";
 import { useState, useRef, useMemo } from "react";
 import {
   StyleSheet,
@@ -21,7 +21,27 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useMutation } from "@tanstack/react-query";
 import { httpsCallable } from "firebase/functions";
 
-const convertToBase64 = async (uri: string): Promise<string> => {
+const compressAndConvertToBase64 = async (uri: string): Promise<string> => {
+  console.log("[AddItem] Compressing image...");
+  
+  try {
+    // Compress and resize the image to reduce payload size
+    const manipulated = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 800 } }], // Resize to max 800px width
+      { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+    );
+    
+    if (manipulated.base64) {
+      const sizeKB = (manipulated.base64.length * 0.75) / 1024;
+      console.log(`[AddItem] Compressed image size: ${sizeKB.toFixed(0)}KB`);
+      return manipulated.base64;
+    }
+  } catch (compressError) {
+    console.warn("[AddItem] Compression failed, trying direct conversion:", compressError);
+  }
+  
+  // Fallback: direct conversion for web or if manipulation fails
   if (Platform.OS === 'web') {
     const response = await fetch(uri);
     const blob = await response.blob();
@@ -36,8 +56,18 @@ const convertToBase64 = async (uri: string): Promise<string> => {
       reader.readAsDataURL(blob);
     });
   } else {
-    return await FileSystem.readAsStringAsync(uri, {
-      encoding: 'base64',
+    // For native, use canvas-based compression as fallback
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string;
+        const base64 = dataUrl.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
     });
   }
 };
@@ -60,55 +90,71 @@ export default function AddItemScreen() {
   const [selectedCategory, setSelectedCategory] = useState<ClothingCategory | null>(null);
   const [detectedColors, setDetectedColors] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const { addItem } = useWardrobe();
 
   const processImageMutation = useMutation({
     mutationFn: async (imageUri: string) => {
       console.log("[AddItem] Starting image processing...");
+      setAnalysisError(null);
       
       let base64Image: string;
       
       if (imageUri.startsWith("data:")) {
         base64Image = imageUri.split(",")[1];
       } else {
-        base64Image = await convertToBase64(imageUri);
+        base64Image = await compressAndConvertToBase64(imageUri);
       }
       
-      // Check if base64 is too large (limit to ~5MB)
+      // Check if base64 is too large (limit to ~2MB after compression)
       const sizeInMB = (base64Image.length * 0.75) / (1024 * 1024);
-      console.log(`[AddItem] Image size: ${sizeInMB.toFixed(2)}MB`);
+      console.log(`[AddItem] Final image size: ${sizeInMB.toFixed(2)}MB`);
       
-      if (sizeInMB > 5) {
-        console.warn("[AddItem] Image too large, skipping AI analysis");
-        throw new Error("Image too large for analysis. Please select a category manually.");
+      if (sizeInMB > 2) {
+        console.warn("[AddItem] Image still too large after compression");
+        throw new Error("Image too large. Please select category manually.");
       }
       
       console.log("[AddItem] Calling Firebase analyzeImage function...");
+      console.log("[AddItem] Function region: us-central1");
       
       try {
         const analyzeImage = httpsCallable(functions, "analyzeImage", {
-          timeout: 60000, // 60 second timeout
+          timeout: 120000, // 120 second timeout for slow connections
         });
+        
+        console.log("[AddItem] Sending request to Cloud Function...");
         const result = await analyzeImage({ imgData: base64Image });
         
-        console.log("[AddItem] Firebase response received:", result.data);
+        console.log("[AddItem] Firebase response received:", JSON.stringify(result.data).substring(0, 200));
         return result.data as {
           processedImage?: string;
           colors?: string[];
           category?: string;
         };
       } catch (firebaseError: any) {
-        console.error("[AddItem] Firebase function error:", firebaseError?.code, firebaseError?.message);
-        // Return empty result to allow manual selection
-        throw new Error(
-          firebaseError?.code === 'functions/internal' 
-            ? "Cloud function error. Please select category manually."
-            : firebaseError?.message || "Analysis failed"
-        );
+        console.error("[AddItem] Firebase function error details:");
+        console.error("  Code:", firebaseError?.code);
+        console.error("  Message:", firebaseError?.message);
+        console.error("  Details:", firebaseError?.details);
+        
+        let errorMessage = "AI analysis unavailable. Please select category manually.";
+        
+        if (firebaseError?.code === 'functions/internal') {
+          errorMessage = "Server error during analysis. Please select category manually.";
+        } else if (firebaseError?.code === 'functions/unavailable') {
+          errorMessage = "Service temporarily unavailable. Please try again later.";
+        } else if (firebaseError?.code === 'functions/deadline-exceeded') {
+          errorMessage = "Analysis timed out. Please select category manually.";
+        }
+        
+        throw new Error(errorMessage);
       }
     },
     onSuccess: (data) => {
-      console.log("[AddItem] Processing successful:", data);
+      console.log("[AddItem] Processing successful");
+      setAnalysisError(null);
+      
       if (data.processedImage) {
         setProcessedImage(`data:image/png;base64,${data.processedImage}`);
       }
@@ -124,10 +170,9 @@ export default function AddItemScreen() {
       setIsProcessing(false);
     },
     onError: (error: Error) => {
-      console.error("[AddItem] Processing error:", error);
+      console.error("[AddItem] Processing error:", error.message);
       setIsProcessing(false);
-      // Don't show alert - user can still proceed with manual category selection
-      console.log("[AddItem] AI analysis failed, user can select category manually");
+      setAnalysisError(error.message);
     },
   });
 
@@ -255,6 +300,7 @@ export default function AddItemScreen() {
     setSelectedCategory(null);
     setDetectedColors([]);
     setIsProcessing(false);
+    setAnalysisError(null);
   };
 
   if (showCamera) {
@@ -359,6 +405,13 @@ export default function AddItemScreen() {
             </View>
 
             <View style={styles.formSection}>
+              {analysisError && (
+                <View style={styles.errorBanner}>
+                  <AlertCircle size={16} color={Colors.gold[400]} />
+                  <Text style={styles.errorText}>{analysisError}</Text>
+                </View>
+              )}
+              
               {detectedColors.length > 0 && (
                 <View style={{ marginBottom: 24 }}>
                   <Text style={styles.sectionTitle}>COLOR</Text>
@@ -709,5 +762,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.5,
     fontWeight: '600',
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(212, 175, 55, 0.1)',
+    borderWidth: 1,
+    borderColor: Colors.gold[400],
+    padding: 12,
+    marginBottom: 20,
+  },
+  errorText: {
+    color: Colors.gold[400],
+    fontSize: 12,
+    flex: 1,
+    letterSpacing: 0.5,
   },
 });
