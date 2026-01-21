@@ -42,7 +42,7 @@ if (getApps().length === 0) {
 
 export const db = getFirestore(app);
 export const storage = getStorage(app);
-export const functions = getFunctions(app);
+export const functions = getFunctions(app, 'us-central1');
 export { auth };
 
 export default app;
