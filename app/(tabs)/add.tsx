@@ -1,6 +1,6 @@
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import { Image } from "expo-image";
 import { router, useRouter } from "expo-router";
 import { Camera, ImageIcon, X, RefreshCcw, Loader2 } from "lucide-react-native";
