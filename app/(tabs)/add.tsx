@@ -74,16 +74,38 @@ export default function AddItemScreen() {
         base64Image = await convertToBase64(imageUri);
       }
       
-      console.log("[AddItem] Calling Firebase analyzeImage function...");
-      const analyzeImage = httpsCallable(functions, "analyzeImage");
-      const result = await analyzeImage({ imgData: base64Image });
+      // Check if base64 is too large (limit to ~5MB)
+      const sizeInMB = (base64Image.length * 0.75) / (1024 * 1024);
+      console.log(`[AddItem] Image size: ${sizeInMB.toFixed(2)}MB`);
       
-      console.log("[AddItem] Firebase response received:", result.data);
-      return result.data as {
-        processedImage?: string;
-        colors?: string[];
-        category?: string;
-      };
+      if (sizeInMB > 5) {
+        console.warn("[AddItem] Image too large, skipping AI analysis");
+        throw new Error("Image too large for analysis. Please select a category manually.");
+      }
+      
+      console.log("[AddItem] Calling Firebase analyzeImage function...");
+      
+      try {
+        const analyzeImage = httpsCallable(functions, "analyzeImage", {
+          timeout: 60000, // 60 second timeout
+        });
+        const result = await analyzeImage({ imgData: base64Image });
+        
+        console.log("[AddItem] Firebase response received:", result.data);
+        return result.data as {
+          processedImage?: string;
+          colors?: string[];
+          category?: string;
+        };
+      } catch (firebaseError: any) {
+        console.error("[AddItem] Firebase function error:", firebaseError?.code, firebaseError?.message);
+        // Return empty result to allow manual selection
+        throw new Error(
+          firebaseError?.code === 'functions/internal' 
+            ? "Cloud function error. Please select category manually."
+            : firebaseError?.message || "Analysis failed"
+        );
+      }
     },
     onSuccess: (data) => {
       console.log("[AddItem] Processing successful:", data);
@@ -104,18 +126,26 @@ export default function AddItemScreen() {
     onError: (error: Error) => {
       console.error("[AddItem] Processing error:", error);
       setIsProcessing(false);
-      Alert.alert(
-        "Processing Failed",
-        "Could not analyze the image. You can still select a category manually."
-      );
+      // Don't show alert - user can still proceed with manual category selection
+      console.log("[AddItem] AI analysis failed, user can select category manually");
     },
   });
 
   const handleProcessImage = async (imageUri: string) => {
     setIsProcessing(true);
     setCapturedImage(imageUri);
-    setProcessedImage(imageUri);
+    setProcessedImage(imageUri); // Use original image as fallback
+    
+    // Try AI analysis but don't block on failure
     processImageMutation.mutate(imageUri);
+    
+    // Auto-complete processing after timeout if still pending
+    setTimeout(() => {
+      if (isProcessing) {
+        console.log("[AddItem] Analysis timeout, allowing manual selection");
+        setIsProcessing(false);
+      }
+    }, 30000); // 30 second safety timeout
   };
 
   const categories = useMemo(() => {
@@ -313,6 +343,12 @@ export default function AddItemScreen() {
                   <View style={styles.processingOverlay}>
                     <ActivityIndicator size="large" color={Colors.gold[400]} />
                     <Text style={styles.processingText}>ANALYZING...</Text>
+                    <TouchableOpacity 
+                      style={styles.skipButton} 
+                      onPress={() => setIsProcessing(false)}
+                    >
+                      <Text style={styles.skipButtonText}>SKIP</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
@@ -659,6 +695,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 2,
     marginTop: 12,
+    fontWeight: '600',
+  },
+  skipButton: {
+    marginTop: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: Colors.gray[500],
+  },
+  skipButtonText: {
+    color: Colors.gray[400],
+    fontSize: 11,
+    letterSpacing: 1.5,
     fontWeight: '600',
   },
 });
