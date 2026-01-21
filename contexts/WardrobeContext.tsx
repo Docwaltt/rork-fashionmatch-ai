@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState, useEffect } from "react";
 import { ClothingItem, ClothingCategory } from "@/types/wardrobe";
 import { db, storage, auth } from "@/lib/firebase";
-import { collection, getDocs, deleteDoc, doc, query, where, setDoc } from "firebase/firestore";
+import { collection, getDocs, deleteDoc, doc, query, where, setDoc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
@@ -119,6 +119,25 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
     },
   });
 
+  const updateItemMutation = useMutation({
+    mutationFn: async (item: Partial<ClothingItem> & { id: string }) => {
+      if (!currentUserId) throw new Error("No authenticated user");
+      
+      console.log('[WardrobeContext] Updating item in Firestore:', item.id);
+      const { id, ...updateData } = item;
+      await updateDoc(doc(db, "wardrobe", id), updateData);
+      console.log('[WardrobeContext] Item updated successfully');
+      return item;
+    },
+    onSuccess: () => {
+      console.log('[WardrobeContext] Update mutation success, invalidating queries');
+      queryClient.invalidateQueries({ queryKey: ["wardrobe", currentUserId] });
+    },
+    onError: (error) => {
+      console.error('[WardrobeContext] Update mutation error:', error);
+    },
+  });
+
   const uploadImage = async (uri: string, itemId: string): Promise<string> => {
     if (!currentUserId) throw new Error("No authenticated user");
     
@@ -142,6 +161,11 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
     removeItemMutation.mutate(id);
   };
 
+  const updateItem = (item: Partial<ClothingItem> & { id: string }) => {
+    console.log('[WardrobeContext] Updating item:', item.id);
+    updateItemMutation.mutate(item);
+  };
+
   const getItemsByCategory = useCallback(
     (category: ClothingCategory) => {
       return items.filter((item) => item.category === category);
@@ -153,10 +177,11 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
     items,
     addItem,
     removeItem,
+    updateItem,
     uploadImage,
     getItemsByCategory,
     isLoading: wardrobeQuery.isLoading,
-    isSaving: addItemMutation.isPending || removeItemMutation.isPending,
+    isSaving: addItemMutation.isPending || removeItemMutation.isPending || updateItemMutation.isPending,
     currentUserId,
   };
 });
