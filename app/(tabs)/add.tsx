@@ -21,6 +21,27 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useMutation } from "@tanstack/react-query";
 import { httpsCallable } from "firebase/functions";
 
+const convertToBase64 = async (uri: string): Promise<string> => {
+  if (Platform.OS === 'web') {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string;
+        const base64 = dataUrl.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } else {
+    return await FileSystem.readAsStringAsync(uri, {
+      encoding: 'base64',
+    });
+  }
+};
+
 import { functions } from "@/lib/firebase";
 import Colors from "@/constants/colors";
 import { useWardrobe } from "@/contexts/WardrobeContext";
@@ -50,10 +71,7 @@ export default function AddItemScreen() {
       if (imageUri.startsWith("data:")) {
         base64Image = imageUri.split(",")[1];
       } else {
-        const base64 = await FileSystem.readAsStringAsync(imageUri, {
-          encoding: 'base64',
-        });
-        base64Image = base64;
+        base64Image = await convertToBase64(imageUri);
       }
       
       console.log("[AddItem] Calling Firebase analyzeImage function...");
