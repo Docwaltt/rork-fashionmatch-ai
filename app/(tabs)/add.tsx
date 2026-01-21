@@ -1,8 +1,9 @@
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Camera, ImageIcon, X, RefreshCcw } from "lucide-react-native";
+import { Camera, ImageIcon, X, RefreshCcw, Loader2 } from "lucide-react-native";
 import { useState, useRef, useMemo } from "react";
 import {
   StyleSheet,
@@ -12,11 +13,15 @@ import {
   ScrollView,
   StatusBar,
   Platform,
-  Alert
+  Alert,
+  ActivityIndicator
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import { useMutation } from "@tanstack/react-query";
+import { httpsCallable } from "firebase/functions";
 
+import { functions } from "@/lib/firebase";
 import Colors from "@/constants/colors";
 import { useWardrobe } from "@/contexts/WardrobeContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -33,9 +38,69 @@ export default function AddItemScreen() {
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<ClothingCategory | null>(null);
   const [detectedColors, setDetectedColors] = useState<string[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
   const { addItem } = useWardrobe();
 
-    const categories = useMemo(() => {
+  const processImageMutation = useMutation({
+    mutationFn: async (imageUri: string) => {
+      console.log("[AddItem] Starting image processing...");
+      
+      let base64Image: string;
+      
+      if (imageUri.startsWith("data:")) {
+        base64Image = imageUri.split(",")[1];
+      } else {
+        const base64 = await FileSystem.readAsStringAsync(imageUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        base64Image = base64;
+      }
+      
+      console.log("[AddItem] Calling Firebase analyzeImage function...");
+      const analyzeImage = httpsCallable(functions, "analyzeImage");
+      const result = await analyzeImage({ imgData: base64Image });
+      
+      console.log("[AddItem] Firebase response received:", result.data);
+      return result.data as {
+        processedImage?: string;
+        colors?: string[];
+        category?: string;
+      };
+    },
+    onSuccess: (data) => {
+      console.log("[AddItem] Processing successful:", data);
+      if (data.processedImage) {
+        setProcessedImage(`data:image/png;base64,${data.processedImage}`);
+      }
+      if (data.colors && data.colors.length > 0) {
+        setDetectedColors(data.colors);
+      }
+      if (data.category) {
+        const validCategories = categories.map(c => c.id);
+        if (validCategories.includes(data.category as ClothingCategory)) {
+          setSelectedCategory(data.category as ClothingCategory);
+        }
+      }
+      setIsProcessing(false);
+    },
+    onError: (error: Error) => {
+      console.error("[AddItem] Processing error:", error);
+      setIsProcessing(false);
+      Alert.alert(
+        "Processing Failed",
+        "Could not analyze the image. You can still select a category manually."
+      );
+    },
+  });
+
+  const handleProcessImage = async (imageUri: string) => {
+    setIsProcessing(true);
+    setCapturedImage(imageUri);
+    setProcessedImage(imageUri);
+    processImageMutation.mutate(imageUri);
+  };
+
+  const categories = useMemo(() => {
     if (userProfile?.gender) {
       return getCategoriesForGender(userProfile.gender);
     }
@@ -63,9 +128,8 @@ export default function AddItemScreen() {
       
       if (photo && photo.uri) {
         console.log("[AddItem] Photo captured:", photo.uri);
-        setCapturedImage(photo.uri);
-        setProcessedImage(photo.uri);
         setShowCamera(false);
+        handleProcessImage(photo.uri);
       }
     } catch (error) {
       console.error("Error taking photo:", error);
@@ -84,8 +148,7 @@ export default function AddItemScreen() {
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
         console.log("[AddItem] Image picked:", asset.uri);
-        setCapturedImage(asset.uri);
-        setProcessedImage(asset.uri);
+        handleProcessImage(asset.uri);
       }
     } catch (error) {
       console.error("Error picking image:", error);
@@ -119,6 +182,7 @@ export default function AddItemScreen() {
     setProcessedImage(null);
     setSelectedCategory(null);
     setDetectedColors([]);
+    setIsProcessing(false);
   };
 
   if (showCamera) {
@@ -203,6 +267,12 @@ export default function AddItemScreen() {
                   style={styles.mainPreview}
                   contentFit="contain"
                 />
+                {isProcessing && (
+                  <View style={styles.processingOverlay}>
+                    <ActivityIndicator size="large" color={Colors.gold[400]} />
+                    <Text style={styles.processingText}>ANALYZING...</Text>
+                  </View>
+                )}
               </View>
               <TouchableOpacity style={styles.retakeButton} onPress={handleReset}>
                 <X size={16} color={Colors.gray[500]} />
@@ -503,6 +573,19 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
   },
   permissionButtonText: {
+    fontWeight: '600',
+  },
+  processingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  processingText: {
+    color: Colors.gold[400],
+    fontSize: 12,
+    letterSpacing: 2,
+    marginTop: 12,
     fontWeight: '600',
   },
 });
