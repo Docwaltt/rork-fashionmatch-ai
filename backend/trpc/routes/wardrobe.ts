@@ -28,27 +28,38 @@ export const wardrobeRouter = createTRPCRouter({
       
       console.log("[Wardrobe] Calling Firebase function:", functionUrl);
 
-      try {
-        const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
-        console.log("[Wardrobe] Base64 data length (stripped):", base64Data?.length);
+      const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+      console.log("[Wardrobe] Base64 data length (stripped):", base64Data?.length);
 
-        const requestBody = {
-          image: base64Data,
-          gender: gender,
-          validCategories: categoryIds,
-        };
-        console.log("[Wardrobe] Request body keys:", Object.keys(requestBody));
+      const requestBody = {
+        image: base64Data,
+        gender: gender,
+        validCategories: categoryIds,
+      };
+      console.log("[Wardrobe] Request body keys:", Object.keys(requestBody));
+      console.log("[Wardrobe] Request payload size:", JSON.stringify(requestBody).length, "bytes");
 
-        console.log("[Wardrobe] Sending request to Firebase...");
-        console.log("[Wardrobe] Request payload size:", JSON.stringify(requestBody).length, "bytes");
-        
-        const response = await fetch(functionUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(requestBody),
-        });
+      // Retry logic for transient failures
+      const MAX_RETRIES = 2;
+      let lastError: Error | null = null;
+
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          console.log(`[Wardrobe] Attempt ${attempt}/${MAX_RETRIES} - Sending request to Firebase...`);
+          
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout
+          
+          const response = await fetch(functionUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal,
+          });
+          
+          clearTimeout(timeoutId);
 
         console.log("[Wardrobe] Firebase response status:", response.status);
         console.log("[Wardrobe] Firebase response ok:", response.ok);
@@ -162,31 +173,48 @@ export const wardrobeRouter = createTRPCRouter({
           console.log("Category mapped:", data.category, "->", category);
         }
 
-        return {
-          category: category || data.category,
-          color: data.color || data.dominantColor || 'unknown',
-          cleanedImage: cleanedImage,
-        };
+          return {
+            category: category || data.category,
+            color: data.color || data.dominantColor || 'unknown',
+            cleanedImage: cleanedImage,
+          };
 
-      } catch (error: any) {
-        console.error("[Wardrobe] ===== CATCH BLOCK ERROR =====");
-        console.error("[Wardrobe] Error type:", typeof error);
-        console.error("[Wardrobe] Error name:", error?.name);
-        console.error("[Wardrobe] Error message:", error?.message);
-        console.error("[Wardrobe] Error stack:", error?.stack);
-        console.error("[Wardrobe] Full error:", JSON.stringify(error, Object.getOwnPropertyNames(error || {}), 2));
-        console.error("[Wardrobe] ===== END CATCH BLOCK =====");
-        
-        // Re-throw if it's already a processed error from above
-        if (error?.message && !error?.message?.includes("fetch failed")) {
-          throw error;
+        } catch (error: any) {
+          console.error(`[Wardrobe] Attempt ${attempt} failed:`, error?.message);
+          lastError = error;
+          
+          // Don't retry for non-transient errors
+          const isTransient = 
+            error?.name === 'AbortError' ||
+            error?.message?.includes('fetch') ||
+            error?.message?.includes('network') ||
+            error?.message?.includes('ECONNREFUSED') ||
+            error?.message?.includes('ETIMEDOUT') ||
+            error?.name === 'TypeError';
+          
+          if (!isTransient || attempt === MAX_RETRIES) {
+            break;
+          }
+          
+          // Wait before retry (exponential backoff)
+          console.log(`[Wardrobe] Waiting ${attempt * 2}s before retry...`);
+          await new Promise(r => setTimeout(r, attempt * 2000));
         }
-        
-        if (error?.message?.includes("fetch") || error?.name === "TypeError") {
-          throw new Error("Network error: Unable to reach image processing service.");
-        }
-        
-        throw new Error(error?.message || "Failed to analyze image. Please try again.");
       }
+
+      // All retries failed
+      console.error("[Wardrobe] ===== ALL RETRIES FAILED =====");
+      console.error("[Wardrobe] Final error:", lastError?.message);
+      console.error("[Wardrobe] Error name:", lastError?.name);
+      
+      if (lastError?.name === 'AbortError') {
+        throw new Error("Request timed out. The image processing service is not responding.");
+      }
+      
+      if (lastError?.message?.includes("fetch") || lastError?.name === "TypeError") {
+        throw new Error("Cannot connect to image processing service. Please verify the Firebase function is deployed and accessible.");
+      }
+      
+      throw new Error(lastError?.message || "Failed to analyze image. Please try again.");
     }),
 });
