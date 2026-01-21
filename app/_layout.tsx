@@ -7,7 +7,6 @@ import { View, ActivityIndicator, StyleSheet } from "react-native";
 
 import { WardrobeProvider } from "@/contexts/WardrobeContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { trpc, trpcClient } from "@/lib/trpc";
 import Colors from "@/constants/colors";
 
 SplashScreen.preventAutoHideAsync();
@@ -76,17 +75,15 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <WardrobeProvider>
-            <GestureHandlerRootView style={{ flex: 1 }}>
-              <RootLayoutNav />
-            </GestureHandlerRootView>
-          </WardrobeProvider>
-        </AuthProvider>
-      </QueryClientProvider>
-    </trpc.Provider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <WardrobeProvider>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <RootLayoutNav />
+          </GestureHandlerRootView>
+        </WardrobeProvider>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
 

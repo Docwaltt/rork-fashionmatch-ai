@@ -1,10 +1,8 @@
-import { trpcClient } from "@/lib/trpc";
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
-import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Camera, ImageIcon, X, RefreshCcw, RotateCcw } from "lucide-react-native";
+import { Camera, ImageIcon, X, RefreshCcw } from "lucide-react-native";
 import { useState, useRef, useMemo } from "react";
 import {
   StyleSheet,
@@ -12,15 +10,12 @@ import {
   View,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
   StatusBar,
   Platform,
   Alert
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useMutation } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
 
 import Colors from "@/constants/colors";
 import { useWardrobe } from "@/contexts/WardrobeContext";
@@ -57,180 +52,20 @@ export default function AddItemScreen() {
     return fallbackCategories;
   }, [userProfile?.gender]);
 
-  const processImageMutation = useMutation({
-    mutationFn: async (imageUri: string) => {
-      console.log("[AddItem] Starting image processing...");
-      console.log("[AddItem] Image URI:", imageUri.substring(0, 100) + "...");
-      console.log("[AddItem] User gender:", userProfile?.gender);
-      
-      try {
-        console.log("[AddItem] Resizing image...");
-        // Resize to smaller dimension to reduce payload size and speed up processing
-        const manipResult = await manipulateAsync(
-          imageUri,
-          [{ resize: { width: 400 } }],
-          { compress: 0.4, format: SaveFormat.JPEG, base64: true }
-        );
-        console.log("[AddItem] Image resized, base64 length:", manipResult.base64?.length);
-
-        if (!manipResult.base64) {
-          throw new Error("Failed to convert image to base64");
-        }
-
-        const base64Data = `data:image/jpeg;base64,${manipResult.base64}`;
-        console.log("[AddItem] Base64 data prepared, total length:", base64Data.length);
-        
-        console.log("[AddItem] Calling backend analyzeImage...");
-        console.log("[AddItem] Timestamp:", new Date().toISOString());
-        
-        // Create a timeout promise
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error("Request timed out. The server is taking too long to respond.")), 60000);
-        });
-        
-        // Race between the actual request and timeout
-        const data = await Promise.race([
-          trpcClient.wardrobe.analyzeImage.mutate({
-            image: base64Data,
-            gender: userProfile?.gender
-          }),
-          timeoutPromise
-        ]) as { cleanedImage: string | null; category?: string; color?: string; backgroundRemovalFailed?: boolean };
-        
-        console.log("[AddItem] Backend response received at:", new Date().toISOString());
-
-        return data;
-      } catch (e: any) {
-        console.error("[AddItem] ===== PROCESSING ERROR =====");
-        console.error("[AddItem] Error object:", e);
-        console.error("[AddItem] Error message:", e?.message);
-        console.error("[AddItem] Error name:", e?.name);
-        console.error("[AddItem] Error data:", e?.data);
-        console.error("[AddItem] Error shape:", e?.shape);
-        console.error("[AddItem] Error cause:", e?.cause);
-        console.error("[AddItem] ===== END PROCESSING ERROR =====");
-        
-        // Extract the actual error message from tRPC error
-        let userMessage = "Could not analyze the image.";
-        
-        // tRPC wraps errors - try to get the actual message
-        if (e?.message) {
-          userMessage = e.message;
-        }
-        if (e?.data?.message) {
-          userMessage = e.data.message;
-        }
-        if (e?.shape?.message) {
-          userMessage = e.shape.message;
-        }
-        
-        // Clean up common error patterns
-        if (userMessage === "Failed to fetch" || userMessage.includes("Network request failed") || userMessage.includes("fetch failed")) {
-          userMessage = "Network error. Please check your connection and try again.";
-        } else if (userMessage.includes("timed out")) {
-          userMessage = "Request timed out. Please try again with a smaller image.";
-        } else if (userMessage.includes("JSON")) {
-          userMessage = "Invalid response from server.";
-        }
-        
-        console.error("[AddItem] Final user message:", userMessage);
-        throw new Error(userMessage);
-      }
-    },
-    onSuccess: (data: { cleanedImage: string | null; category?: string; color?: string; backgroundRemovalFailed?: boolean }) => {
-      console.log("Backend analysis response:", data);
-      console.log("[AddItem] cleanedImage present:", !!data.cleanedImage);
-      console.log("[AddItem] backgroundRemovalFailed:", data.backgroundRemovalFailed);
-
-      if (data.cleanedImage) {
-        const imageSrc = data.cleanedImage.startsWith('data:') || data.cleanedImage.startsWith('http')
-          ? data.cleanedImage 
-          : `data:image/png;base64,${data.cleanedImage}`;
-        setProcessedImage(imageSrc);
-      } else if (data.backgroundRemovalFailed) {
-        console.log("[AddItem] Background removal failed, using original image as fallback");
-        setProcessedImage(capturedImage);
-        Alert.alert(
-          "Background Removal Unavailable", 
-          "We couldn't remove the background but detected your item. You can still save it with the original image.",
-          [{ text: "OK" }]
-        );
-      } else {
-        setProcessedImage(capturedImage);
-        Alert.alert("Notice", "Could not remove background, using original image.");
-      }
-      
-      if (data.category) {
-        const returnedCategory = data.category.toLowerCase().trim();
-        console.log("Backend returned category:", returnedCategory);
-
-        // Try exact match first (ID match)
-        let matchedCat = categories.find(c => c.id.toLowerCase() === returnedCategory);
-
-        // If no exact match, try fuzzy match
-        if (!matchedCat) {
-            matchedCat = categories.find(c => 
-                returnedCategory.includes(c.id.toLowerCase()) || 
-                returnedCategory.includes(c.label.toLowerCase()) ||
-                c.label.toLowerCase().includes(returnedCategory)
-            );
-        }
-        
-        if (matchedCat) {
-          console.log("Matched category:", matchedCat.id);
-          setSelectedCategory(matchedCat.id as ClothingCategory);
-        } else {
-            console.log("No matching category found for:", returnedCategory);
-            // Don't show alert if we can't match, just log it. 
-            // Alert is annoying if backend returns "t-shirt" and we have "top" but mapping failed.
-            // We should trust the user to select if auto-select fails, or improved mapping in backend.
-            // But let's show a toast or small info if possible?
-            // For now, let's Map some common ones manually in frontend as fallback if backend mapping failed
-             if (returnedCategory.includes('shirt') || returnedCategory.includes('top')) setSelectedCategory('top' as ClothingCategory);
-             else if (returnedCategory.includes('pant') || returnedCategory.includes('jeans')) setSelectedCategory('bottom' as ClothingCategory);
-             else if (returnedCategory.includes('shoe') || returnedCategory.includes('boot')) setSelectedCategory('shoes' as ClothingCategory);
-             else if (returnedCategory.includes('dress')) setSelectedCategory('dress' as ClothingCategory);
-             else if (returnedCategory.includes('jacket') || returnedCategory.includes('coat')) setSelectedCategory('outerwear' as ClothingCategory);
-             else if (returnedCategory.includes('bag') || returnedCategory.includes('purse')) setSelectedCategory('accessories' as ClothingCategory);
-             else {
-                 Alert.alert(
-                    "Select Category", 
-                    `We detected "${data.category}". Please select the correct category.`
-                 );
-             }
-        }
-      }
-
-      if (data.color) {
-        setDetectedColors([data.color]);
-      }
-    },
-    onError: (error) => {
-       console.log("Error processing image mutation:", error);
-       Alert.alert("Analysis Failed", error.message || "Could not analyze the image.");
-       // We do NOT set processedImage here to force user to try again or cancel,
-       // as per requirement "image editing should be done by the backend".
-       // If backend failed, we shouldn't just let them save the raw image if that's the rule.
-       // But to be user friendly, maybe we should?
-       // The user said: "image editing should be done by the backend... investigate and fix".
-       // So if it fails, it fails.
-       // But to avoid getting stuck, let's keep the error overlay which allows retrying.
-    }
-  });
-
   const handleTakePhoto = async () => {
     if (!cameraRef.current) return;
 
     try {
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
-        skipProcessing: true, // Faster capture
+        skipProcessing: true,
       });
       
       if (photo && photo.uri) {
+        console.log("[AddItem] Photo captured:", photo.uri);
         setCapturedImage(photo.uri);
+        setProcessedImage(photo.uri);
         setShowCamera(false);
-        processImageMutation.mutate(photo.uri);
       }
     } catch (error) {
       console.error("Error taking photo:", error);
@@ -248,8 +83,9 @@ export default function AddItemScreen() {
 
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
+        console.log("[AddItem] Image picked:", asset.uri);
         setCapturedImage(asset.uri);
-        processImageMutation.mutate(asset.uri);
+        setProcessedImage(asset.uri);
       }
     } catch (error) {
       console.error("Error picking image:", error);
@@ -274,7 +110,6 @@ export default function AddItemScreen() {
     setProcessedImage(null);
     setSelectedCategory(null);
     setDetectedColors([]);
-    processImageMutation.reset();
     
     router.back();
   };
@@ -284,7 +119,6 @@ export default function AddItemScreen() {
     setProcessedImage(null);
     setSelectedCategory(null);
     setDetectedColors([]);
-    processImageMutation.reset();
   };
 
   if (showCamera) {
@@ -369,32 +203,6 @@ export default function AddItemScreen() {
                   style={styles.mainPreview}
                   contentFit="contain"
                 />
-                {processImageMutation.isPending && (
-                  <View style={styles.processingOverlay}>
-                    <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-                    <ActivityIndicator color={Colors.gold[400]} />
-                    <Text style={styles.processingText}>REMOVING BACKGROUND...</Text>
-                  </View>
-                )}
-                {processImageMutation.isError && (
-                  <View style={styles.errorOverlay}>
-                    <Text style={styles.errorIcon}>!</Text>
-                    <Text style={styles.errorText}>Unable to process image</Text>
-                    <Text style={styles.errorSubtext}>{processImageMutation.error?.message || 'Please try again'}</Text>
-                    <TouchableOpacity 
-                      style={styles.retryButton} 
-                      onPress={() => {
-                        if (capturedImage) {
-                          processImageMutation.reset();
-                          processImageMutation.mutate(capturedImage);
-                        }
-                      }}
-                    >
-                      <RotateCcw size={16} color={Colors.white} />
-                      <Text style={styles.retryButtonText}>TRY AGAIN</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
               </View>
               <TouchableOpacity style={styles.retakeButton} onPress={handleReset}>
                 <X size={16} color={Colors.gray[500]} />
@@ -447,33 +255,16 @@ export default function AddItemScreen() {
             </View>
 
             <View style={styles.footer}>
-              {processImageMutation.isError && (
-                <View style={styles.errorBanner}>
-                  <Text style={styles.errorBannerText}>{processImageMutation.error?.message || 'Image processing failed.'}</Text>
-                  <TouchableOpacity 
-                    style={styles.errorBannerRetry} 
-                    onPress={() => {
-                      if (capturedImage) {
-                        processImageMutation.reset();
-                        processImageMutation.mutate(capturedImage);
-                      }
-                    }}
-                  >
-                    <RotateCcw size={14} color={Colors.gold[400]} />
-                    <Text style={styles.errorBannerRetryText}>RETRY</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
               <TouchableOpacity
                 style={[
                   styles.saveButton,
-                  (!processedImage || !selectedCategory || processImageMutation.isPending) && styles.saveButtonDisabled
+                  (!processedImage || !selectedCategory) && styles.saveButtonDisabled
                 ]}
                 onPress={handleSaveItem}
-                disabled={!processedImage || !selectedCategory || processImageMutation.isPending}
+                disabled={!processedImage || !selectedCategory}
               >
                 <LinearGradient
-                  colors={(!processedImage || !selectedCategory || processImageMutation.isPending) 
+                  colors={(!processedImage || !selectedCategory) 
                     ? [Colors.gray[200], Colors.gray[200]] 
                     : [Colors.gold[300], Colors.gold[500]]}
                   style={styles.saveButtonGradient}
@@ -572,93 +363,6 @@ const styles = StyleSheet.create({
   mainPreview: {
     width: '100%',
     height: '100%',
-  },
-  processingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  processingText: {
-    color: Colors.gold[400],
-    fontSize: 10,
-    marginTop: 12,
-    letterSpacing: 1,
-    fontWeight: '600',
-  },
-  errorOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(139, 0, 0, 0.85)',
-  },
-  errorIcon: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: Colors.white,
-    marginBottom: 8,
-  },
-  errorText: {
-    color: Colors.white,
-    fontSize: 12,
-    letterSpacing: 1,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  errorSubtext: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 10,
-    letterSpacing: 0.5,
-    marginBottom: 16,
-    textAlign: 'center' as const,
-    paddingHorizontal: 16,
-  },
-  retryButton: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-  },
-  retryButtonText: {
-    color: Colors.white,
-    fontSize: 12,
-    fontWeight: '600' as const,
-    letterSpacing: 1,
-  },
-  errorBanner: {
-    backgroundColor: 'rgba(139, 0, 0, 0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 0, 0, 0.5)',
-    padding: 12,
-    marginBottom: 16,
-  },
-  errorBannerText: {
-    color: '#ff6b6b',
-    fontSize: 11,
-    textAlign: 'center' as const,
-    letterSpacing: 0.5,
-    marginBottom: 12,
-  },
-  errorBannerRetry: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: Colors.gold[400],
-    alignSelf: 'center' as const,
-  },
-  errorBannerRetryText: {
-    color: Colors.gold[400],
-    fontSize: 11,
-    fontWeight: '600' as const,
-    letterSpacing: 1,
   },
   retakeButton: {
     flexDirection: 'row',
