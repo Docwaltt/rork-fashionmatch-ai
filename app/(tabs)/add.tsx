@@ -2,7 +2,7 @@ import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 import { Image } from "expo-image";
-import { router } from "expo-router";
+import { router, useRouter } from "expo-router";
 import { Camera, ImageIcon, X, RefreshCcw, Loader2 } from "lucide-react-native";
 import { useState, useRef, useMemo } from "react";
 import {
@@ -169,12 +169,36 @@ export default function AddItemScreen() {
 
     addItem(newItem);
     
-    setCapturedImage(null);
-    setProcessedImage(null);
-    setSelectedCategory(null);
-    setDetectedColors([]);
+    Alert.alert(
+      "Added!",
+      "Item has been added to your wardrobe.",
+      [{ text: "OK", onPress: handleReset }]
+    );
+  };
+
+  const handleStyleMe = () => {
+    if (!processedImage || !selectedCategory) return;
+
+    const newItem = {
+      id: Date.now().toString(),
+      imageUri: processedImage,
+      category: selectedCategory,
+      colors: detectedColors,
+      addedAt: Date.now(),
+    };
+
+    addItem(newItem);
     
-    router.back();
+    // Navigate to styling screen with the new item
+    router.push({
+      pathname: '/styling',
+      params: { 
+        itemId: newItem.id,
+        fromAdd: 'true'
+      }
+    });
+    
+    handleReset();
   };
 
   const handleReset = () => {
@@ -327,20 +351,33 @@ export default function AddItemScreen() {
             <View style={styles.footer}>
               <TouchableOpacity
                 style={[
-                  styles.saveButton,
-                  (!processedImage || !selectedCategory) && styles.saveButtonDisabled
+                  styles.styleButton,
+                  (!processedImage || !selectedCategory || isProcessing) && styles.saveButtonDisabled
                 ]}
-                onPress={handleSaveItem}
-                disabled={!processedImage || !selectedCategory}
+                onPress={handleStyleMe}
+                disabled={!processedImage || !selectedCategory || isProcessing}
               >
                 <LinearGradient
-                  colors={(!processedImage || !selectedCategory) 
+                  colors={(!processedImage || !selectedCategory || isProcessing) 
                     ? [Colors.gray[200], Colors.gray[200]] 
                     : [Colors.gold[300], Colors.gold[500]]}
                   style={styles.saveButtonGradient}
                 >
-                  <Text style={styles.saveButtonText}>ADD TO WARDROBE</Text>
+                  <Text style={styles.saveButtonText}>✨ STYLE ME</Text>
                 </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.saveButton,
+                  (!processedImage || !selectedCategory || isProcessing) && styles.saveButtonDisabled
+                ]}
+                onPress={handleSaveItem}
+                disabled={!processedImage || !selectedCategory || isProcessing}
+              >
+                <View style={styles.saveButtonOutline}>
+                  <Text style={styles.saveButtonOutlineText}>SAVE TO WARDROBE</Text>
+                </View>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -494,6 +531,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 40,
   },
+  styleButton: {
+    borderRadius: 0,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
   saveButton: {
     borderRadius: 0,
     overflow: 'hidden',
@@ -507,6 +549,19 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     color: Colors.richBlack,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 2,
+  },
+  saveButtonOutline: {
+    paddingVertical: 18,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.gold[400],
+    backgroundColor: 'transparent',
+  },
+  saveButtonOutlineText: {
+    color: Colors.gold[400],
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 2,
