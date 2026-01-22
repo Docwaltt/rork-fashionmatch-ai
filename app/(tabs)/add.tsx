@@ -2,8 +2,8 @@ import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { Image } from "expo-image";
-import { router, useRouter } from "expo-router";
-import { Camera, ImageIcon, X, RefreshCcw, Loader2, AlertCircle } from "lucide-react-native";
+import { router } from "expo-router";
+import { Camera, ImageIcon, X, RefreshCcw, AlertCircle } from "lucide-react-native";
 import { useState, useRef, useMemo } from "react";
 import {
   StyleSheet,
@@ -18,8 +18,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { useMutation } from "@tanstack/react-query";
-import { httpsCallable } from "firebase/functions";
+import { trpc } from "@/lib/trpc";
+import Colors from "@/constants/colors";
+import { useWardrobe } from "@/contexts/WardrobeContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { ClothingCategory } from "@/types/wardrobe";
+import { getCategoriesForGender } from "@/types/user";
 
 const compressAndConvertToBase64 = async (uri: string): Promise<string> => {
   console.log("[AddItem] Compressing image...");
@@ -72,13 +76,6 @@ const compressAndConvertToBase64 = async (uri: string): Promise<string> => {
   }
 };
 
-import { functions } from "@/lib/firebase";
-import Colors from "@/constants/colors";
-import { useWardrobe } from "@/contexts/WardrobeContext";
-import { useAuth } from "@/contexts/AuthContext";
-import { ClothingCategory } from "@/types/wardrobe";
-import { getCategoriesForGender } from "@/types/user";
-
 export default function AddItemScreen() {
   const cameraRef = useRef<CameraView>(null);
   const { userProfile } = useAuth();
@@ -93,86 +90,31 @@ export default function AddItemScreen() {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const { addItem } = useWardrobe();
 
-  const processImageMutation = useMutation({
-    mutationFn: async (imageUri: string) => {
-      console.log("[AddItem] Starting image processing...");
-      setAnalysisError(null);
-      
-      let base64Image: string;
-      
-      if (imageUri.startsWith("data:")) {
-        base64Image = imageUri.split(",")[1];
-      } else {
-        base64Image = await compressAndConvertToBase64(imageUri);
-      }
-      
-      // Check if base64 is too large (limit to ~2MB after compression)
-      const sizeInMB = (base64Image.length * 0.75) / (1024 * 1024);
-      console.log(`[AddItem] Final image size: ${sizeInMB.toFixed(2)}MB`);
-      
-      if (sizeInMB > 2) {
-        console.warn("[AddItem] Image still too large after compression");
-        throw new Error("Image too large. Please select category manually.");
-      }
-      
-      console.log("[AddItem] Calling Firebase analyzeImage function...");
-      console.log("[AddItem] Function region: us-central1");
-      
-      try {
-        const analyzeImage = httpsCallable(functions, "analyzeImage", {
-          timeout: 120000, // 120 second timeout for slow connections
-        });
-        
-        console.log("[AddItem] Sending request to Cloud Function...");
-        const result = await analyzeImage({ imgData: base64Image });
-        
-        console.log("[AddItem] Firebase response received:", JSON.stringify(result.data).substring(0, 200));
-        return result.data as {
-          processedImage?: string;
-          colors?: string[];
-          category?: string;
-        };
-      } catch (firebaseError: any) {
-        console.error("[AddItem] Firebase function error details:");
-        console.error("  Code:", firebaseError?.code);
-        console.error("  Message:", firebaseError?.message);
-        console.error("  Details:", firebaseError?.details);
-        
-        let errorMessage = "AI analysis unavailable. Please select category manually.";
-        
-        if (firebaseError?.code === 'functions/internal') {
-          errorMessage = "Server error during analysis. Please select category manually.";
-        } else if (firebaseError?.code === 'functions/unavailable') {
-          errorMessage = "Service temporarily unavailable. Please try again later.";
-        } else if (firebaseError?.code === 'functions/deadline-exceeded') {
-          errorMessage = "Analysis timed out. Please select category manually.";
-        }
-        
-        throw new Error(errorMessage);
-      }
-    },
+  const analyzeImageMutation = trpc.wardrobe.analyzeImage.useMutation({
     onSuccess: (data) => {
       console.log("[AddItem] Processing successful");
       setAnalysisError(null);
       
-      if (data.processedImage) {
-        setProcessedImage(`data:image/png;base64,${data.processedImage}`);
+      if (data.cleanedImage) {
+        setProcessedImage(data.cleanedImage);
       }
-      if (data.colors && data.colors.length > 0) {
-        setDetectedColors(data.colors);
+      if (data.color) {
+        setDetectedColors([data.color]);
       }
       if (data.category) {
         const validCategories = categories.map(c => c.id);
         if (validCategories.includes(data.category as ClothingCategory)) {
           setSelectedCategory(data.category as ClothingCategory);
+        } else {
+           console.log("[AddItem] Category from API not in valid list:", data.category);
         }
       }
       setIsProcessing(false);
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
       console.error("[AddItem] Processing error:", error.message);
       setIsProcessing(false);
-      setAnalysisError(error.message);
+      setAnalysisError(error.message || "AI analysis failed. Please select manually.");
     },
   });
 
@@ -181,16 +123,35 @@ export default function AddItemScreen() {
     setCapturedImage(imageUri);
     setProcessedImage(imageUri); // Use original image as fallback
     
-    // Try AI analysis but don't block on failure
-    processImageMutation.mutate(imageUri);
-    
-    // Auto-complete processing after timeout if still pending
-    setTimeout(() => {
-      if (isProcessing) {
-        console.log("[AddItem] Analysis timeout, allowing manual selection");
-        setIsProcessing(false);
+    // Safety timeout to allow manual selection if AI is too slow
+    const timeoutId = setTimeout(() => {
+      setIsProcessing(false);
+      console.log("[AddItem] Analysis timeout, allowing manual selection");
+    }, 60000);
+
+    try {
+      console.log("[AddItem] Preparing image for tRPC...");
+      let base64Image: string;
+
+      if (imageUri.startsWith("data:")) {
+        base64Image = imageUri;
+      } else {
+        const base64 = await compressAndConvertToBase64(imageUri);
+        base64Image = `data:image/jpeg;base64,${base64}`;
       }
-    }, 30000); // 30 second safety timeout
+
+      console.log("[AddItem] Calling tRPC wardrobe.analyzeImage...");
+      analyzeImageMutation.mutate({
+        image: base64Image,
+        gender: userProfile?.gender || undefined,
+      });
+
+    } catch (error: any) {
+      console.error("[AddItem] Error preparing image:", error);
+      setAnalysisError("Failed to prepare image for analysis.");
+      setIsProcessing(false);
+      clearTimeout(timeoutId);
+    }
   };
 
   const categories = useMemo(() => {
