@@ -71,16 +71,21 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   const [queryClient] = useState(() => new QueryClient());
-  const [trpcClient] = useState(() =>
-    trpc.createClient({
+  const [trpcClient] = useState(() => {
+    const apiBaseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+    const trpcUrl = apiBaseUrl ? `${apiBaseUrl}/api/trpc` : (process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api/trpc");
+
+    console.log("[RootLayout] Initializing tRPC client with URL:", trpcUrl);
+
+    return trpc.createClient({
       links: [
         httpBatchLink({
-          url: process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api/trpc",
+          url: trpcUrl,
           transformer,
         }),
       ],
-    })
-  );
+    });
+  });
 
   useEffect(() => {
     SplashScreen.hideAsync();
