@@ -1,17 +1,17 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router, useSegments, useRootNavigationState } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { httpBatchLink } from "@trpc/client";
+import { trpc, transformer } from "@/lib/trpc";
 
 import { WardrobeProvider } from "@/contexts/WardrobeContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Colors from "@/constants/colors";
 
 SplashScreen.preventAutoHideAsync();
-
-const queryClient = new QueryClient();
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { isInitialized, isAuthenticated, hasProfile } = useAuth();
@@ -70,20 +70,34 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  const [queryClient] = useState(() => new QueryClient());
+  const [trpcClient] = useState(() =>
+    trpc.createClient({
+      links: [
+        httpBatchLink({
+          url: process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api/trpc",
+          transformer,
+        }),
+      ],
+    })
+  );
+
   useEffect(() => {
     SplashScreen.hideAsync();
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <WardrobeProvider>
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <RootLayoutNav />
-          </GestureHandlerRootView>
-        </WardrobeProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <WardrobeProvider>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <RootLayoutNav />
+            </GestureHandlerRootView>
+          </WardrobeProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </trpc.Provider>
   );
 }
 
