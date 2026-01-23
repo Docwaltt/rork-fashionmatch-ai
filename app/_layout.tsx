@@ -4,8 +4,6 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
-import { httpBatchLink } from "@trpc/client";
-import { trpc, transformer } from "@/lib/trpc";
 
 import { WardrobeProvider } from "@/contexts/WardrobeContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
@@ -71,33 +69,21 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   const [queryClient] = useState(() => new QueryClient());
-  const [trpcClient] = useState(() =>
-    trpc.createClient({
-      links: [
-        httpBatchLink({
-          url: process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api/trpc",
-          transformer,
-        }),
-      ],
-    })
-  );
 
   useEffect(() => {
     SplashScreen.hideAsync();
   }, []);
 
   return (
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <WardrobeProvider>
-            <GestureHandlerRootView style={{ flex: 1 }}>
-              <RootLayoutNav />
-            </GestureHandlerRootView>
-          </WardrobeProvider>
-        </AuthProvider>
-      </QueryClientProvider>
-    </trpc.Provider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <WardrobeProvider>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <RootLayoutNav />
+          </GestureHandlerRootView>
+        </WardrobeProvider>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
 

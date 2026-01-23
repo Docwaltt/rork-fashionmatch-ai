@@ -18,12 +18,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { trpc } from "@/lib/trpc";
+import { useMutation } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { useWardrobe } from "@/contexts/WardrobeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { ClothingCategory } from "@/types/wardrobe";
-import { getCategoriesForGender } from "@/types/user";
+import { getCategoriesForGender, MALE_CATEGORIES, FEMALE_CATEGORIES } from "@/types/user";
 
 const compressAndConvertToBase64 = async (uri: string): Promise<string> => {
   console.log("[AddItem] Compressing image...");
@@ -90,23 +90,96 @@ export default function AddItemScreen() {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const { addItem } = useWardrobe();
 
-  const analyzeImageMutation = trpc.wardrobe.analyzeImage.useMutation({
+  const analyzeImageMutation = useMutation({
+    mutationFn: async ({ image, gender }: { image: string, gender?: string }) => {
+      console.log("[AddItem] Starting direct Genkit flow call...");
+      const functionUrl = "https://processclothingfn-pfc64ufnsq-uc.a.run.app";
+
+      const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+
+      const validCategoriesList = gender === 'male'
+        ? MALE_CATEGORIES
+        : gender === 'female'
+          ? FEMALE_CATEGORIES
+          : [...MALE_CATEGORIES, ...FEMALE_CATEGORIES];
+
+      const categoryIds = validCategoriesList.map(c => c.id);
+
+      const requestBody = {
+        image: base64Data,
+        gender: gender,
+        validCategories: categoryIds,
+      };
+
+      const response = await fetch(functionUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("[AddItem] Genkit flow failed:", response.status, errorText);
+        throw new Error(`Analysis failed (${response.status})`);
+      }
+
+      const data = await response.json();
+      console.log("[AddItem] Genkit flow response received");
+
+      return data;
+    },
     onSuccess: (data) => {
       console.log("[AddItem] Processing successful");
       setAnalysisError(null);
       
-      if (data.cleanedImage) {
-        setProcessedImage(data.cleanedImage);
+      // Handle different response formats from Genkit function
+      let cleanedImage: string | null = null;
+      const possibleImageFields = ['cleanedImage', 'cleanedImageUrl', 'processedImage', 'image', 'resultImage', 'outputImage'];
+
+      for (const field of possibleImageFields) {
+        if (data[field] && typeof data[field] === 'string' && data[field].length > 100) {
+          const imgData = data[field];
+          cleanedImage = imgData.startsWith('data:') || imgData.startsWith('http')
+            ? imgData
+            : `data:image/png;base64,${imgData}`;
+          break;
+        }
       }
-      if (data.color) {
-        setDetectedColors([data.color]);
+
+      if (cleanedImage) {
+        setProcessedImage(cleanedImage);
       }
+
+      const color = data.color || data.dominantColor;
+      if (color) {
+        setDetectedColors([color]);
+      }
+
       if (data.category) {
+        let category = data.category?.toLowerCase()?.trim() || '';
+
+        // Handle common variations
+        if (category === 't-shirt' || category === 'shirt') category = 'top';
+        if (category === 'pants' || category === 'trousers' || category === 'jeans') category = 'bottom';
+        if (category === 'sneakers' || category === 'boots') category = 'shoes';
+        if (category === 'jacket' || category === 'coat') category = 'outerwear';
+        if (category === 'bag' || category === 'hat') category = 'accessories';
+
         const validCategories = categories.map(c => c.id);
-        if (validCategories.includes(data.category as ClothingCategory)) {
-          setSelectedCategory(data.category as ClothingCategory);
+        if (validCategories.includes(category as ClothingCategory)) {
+          setSelectedCategory(category as ClothingCategory);
         } else {
-           console.log("[AddItem] Category from API not in valid list:", data.category);
+           // Try to find a close match
+           const matchedCat = validCategories.find(id =>
+             category.includes(id) || id.includes(category)
+           );
+           if (matchedCat) {
+             setSelectedCategory(matchedCat as ClothingCategory);
+           } else {
+             console.log("[AddItem] Category from API not in valid list:", data.category);
+           }
         }
       }
       setIsProcessing(false);
@@ -125,12 +198,14 @@ export default function AddItemScreen() {
     
     // Safety timeout to allow manual selection if AI is too slow
     const timeoutId = setTimeout(() => {
-      setIsProcessing(false);
-      console.log("[AddItem] Analysis timeout, allowing manual selection");
+      if (isProcessing) {
+        setIsProcessing(false);
+        console.log("[AddItem] Analysis timeout, allowing manual selection");
+      }
     }, 60000);
 
     try {
-      console.log("[AddItem] Preparing image for tRPC...");
+      console.log("[AddItem] Preparing image for direct call...");
       let base64Image: string;
 
       if (imageUri.startsWith("data:")) {
@@ -140,7 +215,7 @@ export default function AddItemScreen() {
         base64Image = `data:image/jpeg;base64,${base64}`;
       }
 
-      console.log("[AddItem] Calling tRPC wardrobe.analyzeImage...");
+      console.log("[AddItem] Triggering direct Genkit flow analysis...");
       analyzeImageMutation.mutate({
         image: base64Image,
         gender: userProfile?.gender || undefined,
