@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { View, ActivityIndicator, StyleSheet, Platform } from "react-native";
 import { httpBatchLink } from "@trpc/client";
 import { trpc, transformer } from "@/lib/trpc";
+import Constants from "expo-constants";
 
 import { WardrobeProvider } from "@/contexts/WardrobeContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
@@ -83,14 +84,18 @@ export default function RootLayout() {
     }
 
     let trpcUrl;
-    if (apiBaseUrl) {
-      trpcUrl = `${apiBaseUrl}/api/trpc`;
-    } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      // On web (like Rork), use relative path to stay on the same domain
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      // On web (like Rork), always use relative path to avoid CORS and tunnel issues
       trpcUrl = '/api/trpc';
-      console.log("[RootLayout] Web platform detected. Using relative tRPC URL. Origin:", window.location.origin);
+      console.log("[RootLayout] Web platform detected. Using relative tRPC URL:", trpcUrl);
     } else {
-      trpcUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api/trpc";
+      // For native/simulators, try to find the host IP
+      const debuggerHost = Constants.expoConfig?.hostUri;
+      const localhost = debuggerHost?.split(":")[0] || "localhost";
+      const apiBaseUrlFallback = `http://${localhost}:8081/api/trpc`;
+
+      trpcUrl = apiBaseUrl ? `${apiBaseUrl}/api/trpc` : (process.env.EXPO_PUBLIC_API_URL || apiBaseUrlFallback);
+      console.log("[RootLayout] Platform:", Platform.OS, "Host:", localhost, "URL:", trpcUrl);
     }
 
     console.log("[RootLayout] Initializing tRPC client with URL:", trpcUrl);

@@ -69,8 +69,16 @@ export const wardrobeRouter = createTRPCRouter({
           // Get ID token for authentication
           console.log("[Wardrobe] Getting ID token...");
           const client = await auth.getIdTokenClient(functionUrl);
-          const headers = await client.getRequestHeaders() as Record<string, string>;
-          const idToken = headers['Authorization'] || headers['authorization'];
+          const authHeaders = await client.getRequestHeaders();
+
+          // Handle different Header formats (Standard Headers object vs Plain Object)
+          let idToken = '';
+          if (typeof authHeaders.get === 'function') {
+            idToken = authHeaders.get('Authorization') || authHeaders.get('authorization') || '';
+          } else {
+            const h = authHeaders as Record<string, string>;
+            idToken = h['Authorization'] || h['authorization'] || '';
+          }
 
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout
@@ -79,7 +87,7 @@ export const wardrobeRouter = createTRPCRouter({
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "Authorization": idToken || "",
+              "Authorization": idToken,
             },
             body: JSON.stringify(requestBody),
             signal: controller.signal,
