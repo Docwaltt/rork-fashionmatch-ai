@@ -3,15 +3,6 @@ import { createTRPCRouter, publicProcedure } from "../create-context";
 import { MALE_CATEGORIES, FEMALE_CATEGORIES } from "@/types/user";
 import { GoogleAuth } from "google-auth-library";
 
-// Initialize Google Auth
-const auth = new GoogleAuth({
-  credentials: {
-    client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    project_id: process.env.GOOGLE_PROJECT_ID,
-  },
-});
-
 export const wardrobeRouter = createTRPCRouter({
   analyzeImage: publicProcedure
     .input(z.object({
@@ -53,6 +44,24 @@ export const wardrobeRouter = createTRPCRouter({
       const MAX_RETRIES = 2;
       let lastError: Error | null = null;
 
+      // Initialize Google Auth inside the request to ensure env vars are loaded
+      const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+      const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+      const projectId = process.env.GOOGLE_PROJECT_ID;
+
+      if (!clientEmail || !privateKey || !projectId) {
+        console.error("[Wardrobe] Missing Google Cloud credentials in environment variables");
+        throw new Error("Server configuration error: Missing cloud credentials");
+      }
+
+      const auth = new GoogleAuth({
+        credentials: {
+          client_email: clientEmail,
+          private_key: privateKey,
+          project_id: projectId,
+        },
+      });
+
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
           console.log(`[Wardrobe] Attempt ${attempt}/${MAX_RETRIES} - Sending request to Firebase...`);
@@ -60,8 +69,8 @@ export const wardrobeRouter = createTRPCRouter({
           // Get ID token for authentication
           console.log("[Wardrobe] Getting ID token...");
           const client = await auth.getIdTokenClient(functionUrl);
-          const idTokenResponse = await client.getRequestHeaders();
-          const idToken = idTokenResponse.Authorization;
+          const headers = await client.getRequestHeaders() as Record<string, string>;
+          const idToken = headers['Authorization'] || headers['authorization'];
 
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout
