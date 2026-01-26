@@ -84,18 +84,22 @@ export default function RootLayout() {
     }
 
     let trpcUrl;
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      // On web (like Rork), always use relative path to avoid CORS and tunnel issues
+
+    // Always prioritize window origin if available (handles Web and Web-based Simulators)
+    if (typeof window !== 'undefined' && window.location && window.location.origin && !window.location.origin.includes('localhost')) {
+      trpcUrl = `${window.location.origin}/api/trpc`;
+      console.log("[RootLayout] Web-based environment detected. Using origin-based tRPC URL:", trpcUrl);
+    } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
       trpcUrl = '/api/trpc';
-      console.log("[RootLayout] Web platform detected. Using relative tRPC URL:", trpcUrl);
+      console.log("[RootLayout] Local Web detected. Using relative tRPC URL:", trpcUrl);
     } else {
-      // For native/simulators, try to find the host IP
+      // For native simulators or remote devices
       const debuggerHost = Constants.expoConfig?.hostUri;
       const localhost = debuggerHost?.split(":")[0] || "localhost";
       const apiBaseUrlFallback = `http://${localhost}:8081/api/trpc`;
 
       trpcUrl = apiBaseUrl ? `${apiBaseUrl}/api/trpc` : (process.env.EXPO_PUBLIC_API_URL || apiBaseUrlFallback);
-      console.log("[RootLayout] Platform:", Platform.OS, "Host:", localhost, "URL:", trpcUrl);
+      console.log("[RootLayout] Native Platform:", Platform.OS, "Host:", localhost, "URL:", trpcUrl);
     }
 
     console.log("[RootLayout] Initializing tRPC client with URL:", trpcUrl);
