@@ -7,7 +7,7 @@
     "start-web": "bunx rork start -p f2h9gazx15lacf31u1m1z --web --tunnel",
     "start-web-dev": "DEBUG=expo* bunx rork start -p f2h9gazx15lacf31u1m1z --web --tunnel",
     "backend": "bun backend/server.ts",
-    "dev": "bun run backend/server.ts & bun start",
+    "dev": "bun start",
     "lint": "expo lint"
   },
   "dependencies": {
