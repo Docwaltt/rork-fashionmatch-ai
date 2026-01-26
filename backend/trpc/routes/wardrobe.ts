@@ -1,6 +1,16 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../create-context";
 import { MALE_CATEGORIES, FEMALE_CATEGORIES } from "@/types/user";
+import { GoogleAuth } from "google-auth-library";
+
+// Initialize Google Auth
+const auth = new GoogleAuth({
+  credentials: {
+    client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    project_id: process.env.GOOGLE_PROJECT_ID,
+  },
+});
 
 export const wardrobeRouter = createTRPCRouter({
   analyzeImage: publicProcedure
@@ -47,6 +57,12 @@ export const wardrobeRouter = createTRPCRouter({
         try {
           console.log(`[Wardrobe] Attempt ${attempt}/${MAX_RETRIES} - Sending request to Firebase...`);
           
+          // Get ID token for authentication
+          console.log("[Wardrobe] Getting ID token...");
+          const client = await auth.getIdTokenClient(functionUrl);
+          const idTokenResponse = await client.getRequestHeaders();
+          const idToken = idTokenResponse.Authorization;
+
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout
           
@@ -54,6 +70,7 @@ export const wardrobeRouter = createTRPCRouter({
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              "Authorization": idToken || "",
             },
             body: JSON.stringify(requestBody),
             signal: controller.signal,

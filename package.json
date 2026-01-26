@@ -6,6 +6,8 @@
     "start": "bunx rork start -p f2h9gazx15lacf31u1m1z --tunnel",
     "start-web": "bunx rork start -p f2h9gazx15lacf31u1m1z --web --tunnel",
     "start-web-dev": "DEBUG=expo* bunx rork start -p f2h9gazx15lacf31u1m1z --web --tunnel",
+    "backend": "bun backend/server.ts",
+    "dev": "bun run backend/server.ts & bun start",
     "lint": "expo lint"
   },
   "dependencies": {
@@ -40,6 +42,7 @@
     "expo-system-ui": "~6.0.8",
     "expo-web-browser": "~15.0.9",
     "firebase": "^12.8.0",
+    "google-auth-library": "^10.5.0",
     "hono": "^4.11.4",
     "lucide-react-native": "^0.475.0",
     "react": "19.1.0",
