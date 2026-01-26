@@ -113,8 +113,22 @@ export default function AddItemScreen() {
     },
     onError: (error: any) => {
       console.error("[AddItem] Processing error:", error.message);
+      console.error("[AddItem] Full error:", error);
       setIsProcessing(false);
-      setAnalysisError(error.message || "AI analysis failed. Please select manually.");
+      
+      // Provide user-friendly error messages
+      let errorMessage = "AI analysis unavailable. Please select category manually.";
+      
+      if (error.message?.includes("Failed to fetch") || error.message?.includes("fetch")) {
+        errorMessage = "Cannot connect to server. Please select category manually.";
+        console.error("[AddItem] Network error - backend may be unreachable");
+      } else if (error.message?.includes("timeout")) {
+        errorMessage = "Request timed out. Please select category manually.";
+      } else if (error.message?.includes("CORS")) {
+        errorMessage = "Server configuration issue. Please select category manually.";
+      }
+      
+      setAnalysisError(errorMessage);
     },
   });
 
@@ -142,7 +156,10 @@ export default function AddItemScreen() {
         base64Image = `data:image/jpeg;base64,${base64}`;
       }
 
+      const apiUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+      console.log("[AddItem] API Base URL:", apiUrl || "(not set, using relative path)");
       console.log("[AddItem] Calling tRPC wardrobe.analyzeImage...");
+      
       analyzeImageMutation.mutate({
         image: base64Image,
         gender: userProfile?.gender || undefined,
@@ -150,7 +167,7 @@ export default function AddItemScreen() {
 
     } catch (error: any) {
       console.error("[AddItem] Error preparing image:", error);
-      setAnalysisError("Failed to prepare image for analysis.");
+      setAnalysisError("Failed to prepare image. Please select category manually.");
       setIsProcessing(false);
       clearTimeout(timeoutId);
     }
