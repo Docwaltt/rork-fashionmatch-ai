@@ -82,9 +82,16 @@ export default function RootLayout() {
       apiBaseUrl = apiBaseUrl.slice(0, -1);
     }
 
-    const trpcUrl = apiBaseUrl
-      ? `${apiBaseUrl}/api/trpc`
-      : (process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api/trpc");
+    let trpcUrl;
+    if (apiBaseUrl) {
+      trpcUrl = `${apiBaseUrl}/api/trpc`;
+    } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      // On web (like Rork), use relative path to stay on the same domain
+      trpcUrl = '/api/trpc';
+      console.log("[RootLayout] Web platform detected. Using relative tRPC URL. Origin:", window.location.origin);
+    } else {
+      trpcUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api/trpc";
+    }
 
     console.log("[RootLayout] Initializing tRPC client with URL:", trpcUrl);
 
