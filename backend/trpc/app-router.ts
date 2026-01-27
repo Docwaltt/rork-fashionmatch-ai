@@ -1,4 +1,4 @@
-import { createTRPCRouter } from "./create-context";
+import { createTRPCRouter, publicProcedure } from "./create-context";
 import { exampleRouter } from "./routes/example";
 import { wardrobeRouter } from "./routes/wardrobe";
 
