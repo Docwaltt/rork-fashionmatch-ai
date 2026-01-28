@@ -49,13 +49,6 @@ export const wardrobeRouter = createTRPCRouter({
       const privateKey = (process.env.GOOGLE_PRIVATE_KEY || process.env.EXPO_PUBLIC_GOOGLE_PRIVATE_KEY)?.replace(/\\n/g, '\n');
       const projectId = process.env.GOOGLE_PROJECT_ID || process.env.EXPO_PUBLIC_GOOGLE_PROJECT_ID || process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID;
 
-      console.log("[Wardrobe] Credential check:", {
-        hasEmail: !!clientEmail,
-        hasKey: !!privateKey,
-        hasProjectId: !!projectId,
-        emailLength: clientEmail?.length || 0,
-        keyLength: privateKey?.length || 0
-      });
 
       if (!clientEmail || !privateKey || !projectId) {
         const missing = [];
