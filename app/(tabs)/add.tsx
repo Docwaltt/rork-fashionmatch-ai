@@ -86,27 +86,51 @@ export default function AddItemScreen() {
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<ClothingCategory | null>(null);
   const [detectedColors, setDetectedColors] = useState<string[]>([]);
+   const [detectedTexture, setDetectedTexture] = useState<string | null>(null);
+   const [detectedDesign, setDetectedDesign] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const { addItem } = useWardrobe();
 
   const analyzeImageMutation = trpc.wardrobe.analyzeImage.useMutation({
     onSuccess: (data) => {
-      console.log("[AddItem] Processing successful");
+      console.log("[AddItem] Processing successful. Response data:", {
+        category: data.category,
+        color: data.color,
+        hasCleanedImage: !!data.cleanedImage
+      });
       setAnalysisError(null);
       
       if (data.cleanedImage) {
         setProcessedImage(data.cleanedImage);
+      } else {
+        console.log("[AddItem] No cleaned image returned from AI");
       }
       if (data.color) {
         setDetectedColors([data.color]);
       }
+      if (data.texture) {
+        setDetectedTexture(data.texture);
+      }
+      if (data.designPattern) {
+        setDetectedDesign(data.designPattern);
+      }
       if (data.category) {
         const validCategories = categories.map(c => c.id);
-        if (validCategories.includes(data.category as ClothingCategory)) {
-          setSelectedCategory(data.category as ClothingCategory);
+        const returnedCategory = data.category as ClothingCategory;
+
+        if (validCategories.includes(returnedCategory)) {
+          console.log("[AddItem] Setting category:", returnedCategory);
+          setSelectedCategory(returnedCategory);
         } else {
-           console.log("[AddItem] Category from API not in valid list:", data.category);
+           console.log("[AddItem] Category from API not in valid list:", returnedCategory);
+           // Try one last mapping check on the client side
+           const lowercaseCat = returnedCategory.toLowerCase();
+           const match = validCategories.find(id => lowercaseCat.includes(id) || id.includes(lowercaseCat));
+           if (match) {
+             console.log("[AddItem] Client-side category match found:", match);
+             setSelectedCategory(match as ClothingCategory);
+           }
         }
       }
       setIsProcessing(false);
@@ -279,6 +303,8 @@ export default function AddItemScreen() {
     setProcessedImage(null);
     setSelectedCategory(null);
     setDetectedColors([]);
+    setDetectedTexture(null);
+    setDetectedDesign(null);
     setIsProcessing(false);
     setAnalysisError(null);
   };
@@ -392,27 +418,44 @@ export default function AddItemScreen() {
                 </View>
               )}
               
-              {detectedColors.length > 0 && (
-                <View style={{ marginBottom: 24 }}>
-                  <Text style={styles.sectionTitle}>COLOR</Text>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {detectedColors.map((color, index) => (
-                      <View key={index} style={{ 
-                        paddingHorizontal: 16, 
-                        paddingVertical: 8, 
-                        backgroundColor: Colors.card,
-                        borderWidth: 1,
-                        borderColor: Colors.gold[400],
-                        borderRadius: 0,
-                      }}>
-                        <Text style={{ color: Colors.gold[400], fontSize: 12, fontWeight: '600', letterSpacing: 1 }}>
-                          {color.toUpperCase()}
-                        </Text>
-                      </View>
-                    ))}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
+                {detectedColors.length > 0 && (
+                  <View style={{ flex: 1, minWidth: '45%' }}>
+                    <Text style={styles.sectionTitle}>COLOR</Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {detectedColors.map((color, index) => (
+                        <View key={index} style={styles.detectedInfoChip}>
+                          <Text style={styles.detectedInfoText}>
+                            {color.toUpperCase()}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
                   </View>
-                </View>
-              )}
+                )}
+
+                {detectedTexture && (
+                  <View style={{ flex: 1, minWidth: '45%' }}>
+                    <Text style={styles.sectionTitle}>TEXTURE</Text>
+                    <View style={styles.detectedInfoChip}>
+                      <Text style={styles.detectedInfoText}>
+                        {detectedTexture.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {detectedDesign && detectedDesign !== 'none' && (
+                  <View style={{ flex: 1, minWidth: '45%' }}>
+                    <Text style={styles.sectionTitle}>DESIGN</Text>
+                    <View style={styles.detectedInfoChip}>
+                      <Text style={styles.detectedInfoText}>
+                        {detectedDesign.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
 
               <Text style={styles.sectionTitle}>CATEGORY</Text>
               <View style={styles.categoryGrid}>
@@ -758,5 +801,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     flex: 1,
     letterSpacing: 0.5,
+  },
+  detectedInfoChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.gold[400],
+    borderRadius: 0,
+    alignSelf: 'flex-start',
+  },
+  detectedInfoText: {
+    color: Colors.gold[400],
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 1,
   },
 });
