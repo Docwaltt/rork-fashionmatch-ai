@@ -50,8 +50,13 @@ export const wardrobeRouter = createTRPCRouter({
       const projectId = process.env.GOOGLE_PROJECT_ID;
 
       if (!clientEmail || !privateKey || !projectId) {
-        console.error("[Wardrobe] Missing Google Cloud credentials in environment variables");
-        throw new Error("Server configuration error: Missing cloud credentials");
+        const missing = [];
+        if (!clientEmail) missing.push("GOOGLE_SERVICE_ACCOUNT_EMAIL");
+        if (!privateKey) missing.push("GOOGLE_PRIVATE_KEY");
+        if (!projectId) missing.push("GOOGLE_PROJECT_ID");
+
+        console.error("[Wardrobe] Missing Google Cloud credentials:", missing.join(", "));
+        throw new Error(`Server configuration error: Missing cloud credentials (${missing.join(", ")})`);
       }
 
       const auth = new GoogleAuth({
