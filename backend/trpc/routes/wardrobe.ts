@@ -155,6 +155,8 @@ export const wardrobeRouter = createTRPCRouter({
         console.log("[Wardrobe] Response data keys:", Object.keys(data));
         console.log("[Wardrobe] Category:", data.category);
         console.log("[Wardrobe] Color:", data.color || data.dominantColor);
+        console.log("[Wardrobe] Texture:", data.texture);
+        console.log("[Wardrobe] Design Pattern:", data.designPattern || data.pattern);
         console.log("[Wardrobe] cleanedImage present:", !!data.cleanedImage, "- length:", data.cleanedImage?.length || 0);
         console.log("[Wardrobe] cleanedImageUrl present:", !!data.cleanedImageUrl);
         console.log("[Wardrobe] processedImage present:", !!data.processedImage);
@@ -195,15 +197,37 @@ export const wardrobeRouter = createTRPCRouter({
         // Validate category against valid options
         let category = data.category?.toLowerCase()?.trim() || '';
         
-        // Handle common variations
-        if (category === 't-shirt' || category === 'shirt') category = 'top';
-        if (category === 'pants' || category === 'trousers' || category === 'jeans') category = 'bottom';
-        if (category === 'sneakers' || category === 'boots') category = 'shoes';
-        if (category === 'jacket' || category === 'coat') category = 'outerwear';
-        if (category === 'bag' || category === 'hat') category = 'accessories';
+        // Handle common variations and synonyms
+        const categoryMap: Record<string, string> = {
+          't-shirt': 'top',
+          'shirt': 'top',
+          'blouse': 'top',
+          'sweater': 'top',
+          'hoodie': 'top',
+          'pants': 'bottom',
+          'trousers': 'bottom',
+          'jeans': 'bottom',
+          'shorts': 'bottom',
+          'skirt': 'bottom',
+          'sneakers': 'shoes',
+          'boots': 'shoes',
+          'flats': 'shoes',
+          'heels': 'shoes',
+          'jacket': 'outerwear',
+          'coat': 'outerwear',
+          'blazer': 'outerwear',
+          'bag': 'accessories',
+          'hat': 'accessories',
+          'belt': 'accessories',
+          'scarf': 'accessories',
+        };
+
+        if (categoryMap[category]) {
+          category = categoryMap[category];
+        }
 
         if (category && !categoryIds.includes(category)) {
-          // Try to find a close match
+          // Try to find a close match if not found in map
           const matchedCat = categoryIds.find(id => 
             category.includes(id) || id.includes(category)
           );
@@ -214,8 +238,10 @@ export const wardrobeRouter = createTRPCRouter({
         }
 
           return {
-            category: category || data.category,
+            category: category || data.category || 'unknown',
             color: data.color || data.dominantColor || 'unknown',
+            texture: data.texture || 'plain',
+            designPattern: data.designPattern || data.pattern || 'none',
             cleanedImage: cleanedImage,
           };
 
