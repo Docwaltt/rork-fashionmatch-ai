@@ -17,11 +17,8 @@ function findEnvFile(startDir: string, limit = 10): string | null {
 }
 
 export function initializeEnv() {
-  if (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.EXPO_PUBLIC_GOOGLE_SERVICE_ACCOUNT_EMAIL) {
-    return;
-  }
-
   const envFile = findEnvFile(process.cwd()) || findEnvFile(__dirname);
+
   if (envFile) {
     try {
       const content = fs.readFileSync(envFile, 'utf8');
@@ -33,9 +30,14 @@ export function initializeEnv() {
           let value = (match[2] || '').trim();
           if (value.startsWith('"') && value.endsWith('"')) value = value.substring(1, value.length - 1);
           if (value.startsWith("'") && value.endsWith("'")) value = value.substring(1, value.length - 1);
-          if (!process.env[key] || process.env[key] === 'undefined') process.env[key] = value;
+
+          // Only set if not already present or if it's the string 'undefined'
+          if (!process.env[key] || process.env[key] === 'undefined' || process.env[key] === '') {
+            process.env[key] = value;
+          }
         }
       }
+      // Also call dotenv config to be sure
       config({ path: envFile });
     } catch (e) {
       console.error("[Env] Initialization error:", e);
