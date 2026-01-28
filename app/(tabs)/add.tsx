@@ -94,11 +94,17 @@ export default function AddItemScreen() {
 
   const analyzeImageMutation = trpc.wardrobe.analyzeImage.useMutation({
     onSuccess: (data) => {
-      console.log("[AddItem] Processing successful");
+      console.log("[AddItem] Processing successful. Response data:", {
+        category: data.category,
+        color: data.color,
+        hasCleanedImage: !!data.cleanedImage
+      });
       setAnalysisError(null);
       
       if (data.cleanedImage) {
         setProcessedImage(data.cleanedImage);
+      } else {
+        console.log("[AddItem] No cleaned image returned from AI");
       }
       if (data.color) {
         setDetectedColors([data.color]);
@@ -111,10 +117,20 @@ export default function AddItemScreen() {
       }
       if (data.category) {
         const validCategories = categories.map(c => c.id);
-        if (validCategories.includes(data.category as ClothingCategory)) {
-          setSelectedCategory(data.category as ClothingCategory);
+        const returnedCategory = data.category as ClothingCategory;
+
+        if (validCategories.includes(returnedCategory)) {
+          console.log("[AddItem] Setting category:", returnedCategory);
+          setSelectedCategory(returnedCategory);
         } else {
-           console.log("[AddItem] Category from API not in valid list:", data.category);
+           console.log("[AddItem] Category from API not in valid list:", returnedCategory);
+           // Try one last mapping check on the client side
+           const lowercaseCat = returnedCategory.toLowerCase();
+           const match = validCategories.find(id => lowercaseCat.includes(id) || id.includes(lowercaseCat));
+           if (match) {
+             console.log("[AddItem] Client-side category match found:", match);
+             setSelectedCategory(match as ClothingCategory);
+           }
         }
       }
       setIsProcessing(false);

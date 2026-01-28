@@ -36,6 +36,9 @@ export const wardrobeRouter = createTRPCRouter({
         image: base64Data,
         gender: gender,
         validCategories: categoryIds,
+        removeBackground: true,
+        includeCleanedImage: true,
+        includeSegmentation: true,
       };
       console.log("[Wardrobe] Request body keys:", Object.keys(requestBody));
       console.log("[Wardrobe] Request payload size:", JSON.stringify(requestBody).length, "bytes");
@@ -153,10 +156,10 @@ export const wardrobeRouter = createTRPCRouter({
         console.log("[Wardrobe] ===== FIREBASE SUCCESS RESPONSE =====");
         console.log("[Wardrobe] Full response data:", JSON.stringify(data, null, 2).substring(0, 1000));
         console.log("[Wardrobe] Response data keys:", Object.keys(data));
-        console.log("[Wardrobe] Category:", data.category);
-        console.log("[Wardrobe] Color:", data.color || data.dominantColor);
+        console.log("[Wardrobe] Category (raw):", data.category);
+        console.log("[Wardrobe] Color:", data.color || data.colour || data.dominantColor);
         console.log("[Wardrobe] Texture:", data.texture);
-        console.log("[Wardrobe] Design Pattern:", data.designPattern || data.pattern);
+        console.log("[Wardrobe] Design Pattern:", data.designPattern || data.pattern || data.design);
         console.log("[Wardrobe] cleanedImage present:", !!data.cleanedImage, "- length:", data.cleanedImage?.length || 0);
         console.log("[Wardrobe] cleanedImageUrl present:", !!data.cleanedImageUrl);
         console.log("[Wardrobe] processedImage present:", !!data.processedImage);
@@ -166,7 +169,7 @@ export const wardrobeRouter = createTRPCRouter({
         // Handle different response formats from Firebase function
         // Check multiple possible field names the backend might use
         let cleanedImage: string | null = null;
-        const possibleImageFields = ['cleanedImage', 'cleanedImageUrl', 'processedImage', 'image', 'resultImage', 'outputImage'];
+        const possibleImageFields = ['cleanedImage', 'processedImage', 'backgroundRemovedImage', 'segmentationImage', 'cleanedImageUrl', 'image', 'resultImage', 'outputImage'];
         
         for (const field of possibleImageFields) {
           if (data[field] && typeof data[field] === 'string' && data[field].length > 100) {
@@ -197,32 +200,50 @@ export const wardrobeRouter = createTRPCRouter({
         // Validate category against valid options
         let category = data.category?.toLowerCase()?.trim() || '';
         
-        // Handle common variations and synonyms
+        // Handle common variations and synonyms to map to our granular categories
         const categoryMap: Record<string, string> = {
-          't-shirt': 'top',
-          'shirt': 'top',
-          'blouse': 'top',
-          'sweater': 'top',
-          'hoodie': 'top',
-          'pants': 'bottom',
-          'trousers': 'bottom',
-          'jeans': 'bottom',
-          'shorts': 'bottom',
-          'skirt': 'bottom',
-          'sneakers': 'shoes',
-          'boots': 'shoes',
-          'flats': 'shoes',
-          'heels': 'shoes',
-          'jacket': 'outerwear',
-          'coat': 'outerwear',
-          'blazer': 'outerwear',
-          'bag': 'accessories',
-          'hat': 'accessories',
-          'belt': 'accessories',
-          'scarf': 'accessories',
+          // Males
+          'tshirt': 't-shirt',
+          'tee': 't-shirt',
+          't shirt': 't-shirt',
+          'formal shirt': 'shirt',
+          'dress shirt': 'shirt',
+          'pants': 'trousers',
+          'pant': 'trousers',
+          'slacks': 'trousers',
+          'chinos': 'trousers',
+          'sneaker': 'sneakers',
+          'boot': 'boots',
+          'formal shoes': 'shoes',
+          'dress shoes': 'shoes',
+          'oxfords': 'shoes',
+          'loafers': 'shoes',
+          // Females
+          'blouses': 'blouse',
+          'tops': 'top',
+          'dresses': 'dress',
+          'gowns': 'gown',
+          'skirts': 'skirt',
+          'jumpsuits': 'jumpsuit',
+          'cardigans': 'cardigan',
+          'sweaters': 'sweater',
+          'coats': 'coat',
+          'jackets': 'jacket',
+          'heel': 'heels',
+          'flat': 'flats',
+          'sandal': 'sandals',
+          'bags': 'bag',
+          'purse': 'bag',
+          'handbag': 'bag',
+          'jewelry': 'jewelry',
+          'necklace': 'jewelry',
+          'earrings': 'jewelry',
+          'bracelet': 'jewelry',
+          'ring': 'jewelry',
         };
 
         if (categoryMap[category]) {
+          console.log(`[Wardrobe] Mapping category: ${category} -> ${categoryMap[category]}`);
           category = categoryMap[category];
         }
 
@@ -239,9 +260,9 @@ export const wardrobeRouter = createTRPCRouter({
 
           return {
             category: category || data.category || 'unknown',
-            color: data.color || data.dominantColor || 'unknown',
+            color: data.color || data.colour || data.dominantColor || 'unknown',
             texture: data.texture || 'plain',
-            designPattern: data.designPattern || data.pattern || 'none',
+            designPattern: data.designPattern || data.pattern || data.design || 'none',
             cleanedImage: cleanedImage,
           };
 
