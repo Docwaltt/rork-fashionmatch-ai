@@ -3,7 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Camera, ImageIcon, X, RefreshCcw, AlertCircle } from "lucide-react-native";
+import { Camera, ImageIcon, X, RefreshCcw, AlertCircle, CheckCircle } from "lucide-react-native";
 import { useState, useRef, useMemo } from "react";
 import {
   StyleSheet,
@@ -90,6 +90,7 @@ export default function AddItemScreen() {
    const [detectedDesign, setDetectedDesign] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisSuccess, setAnalysisSuccess] = useState<boolean>(false);
   const { addItem } = useWardrobe();
 
   const analyzeImageMutation = trpc.wardrobe.analyzeImage.useMutation({
@@ -100,6 +101,7 @@ export default function AddItemScreen() {
         hasCleanedImage: !!data.cleanedImage
       });
       setAnalysisError(null);
+      setAnalysisSuccess(true);
       
       if (data.cleanedImage) {
         setProcessedImage(data.cleanedImage);
@@ -167,6 +169,7 @@ export default function AddItemScreen() {
       }
       
       setAnalysisError(errorMessage);
+      setAnalysisSuccess(false);
     },
   });
 
@@ -321,6 +324,7 @@ export default function AddItemScreen() {
     setDetectedDesign(null);
     setIsProcessing(false);
     setAnalysisError(null);
+    setAnalysisSuccess(false);
   };
 
   if (showCamera) {
@@ -425,6 +429,13 @@ export default function AddItemScreen() {
             </View>
 
             <View style={styles.formSection}>
+              {analysisSuccess && (
+                <View style={styles.successBanner}>
+                  <CheckCircle size={16} color="#4CAF50" />
+                  <Text style={styles.successText}>Analysis complete! Category and details detected.</Text>
+                </View>
+              )}
+              
               {analysisError && (
                 <View style={styles.errorBanner}>
                   <AlertCircle size={16} color={Colors.gold[400]} />
@@ -830,5 +841,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 1,
+  },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+    padding: 12,
+    marginBottom: 20,
+  },
+  successText: {
+    color: '#4CAF50',
+    fontSize: 12,
+    flex: 1,
+    letterSpacing: 0.5,
+    fontWeight: '500',
   },
 });
