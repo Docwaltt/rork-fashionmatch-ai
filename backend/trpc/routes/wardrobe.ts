@@ -152,15 +152,27 @@ export const wardrobeRouter = createTRPCRouter({
           throw new Error(errorMessage);
         }
 
-        const data = await response.json();
+        let data = await response.json();
         console.log("[Wardrobe] ===== FIREBASE SUCCESS RESPONSE =====");
-        console.log("[Wardrobe] Full response data:", JSON.stringify(data, null, 2).substring(0, 1000));
+
+        // Handle Genkit/Firebase function nesting
+        if (data.result && typeof data.result === 'object') {
+          console.log("[Wardrobe] Unwrapping data.result");
+          data = data.result;
+        } else if (data.data && typeof data.data === 'object') {
+          console.log("[Wardrobe] Unwrapping data.data");
+          data = data.data;
+        }
+
         console.log("[Wardrobe] Response data keys:", Object.keys(data));
-        console.log("[Wardrobe] Category (raw):", data.category);
-        console.log("[Wardrobe] Color:", data.color || data.colour || data.dominantColor);
-        console.log("[Wardrobe] Texture:", data.texture);
-        console.log("[Wardrobe] Design Pattern:", data.designPattern || data.pattern || data.design);
-        console.log("[Wardrobe] cleanedImage present:", !!data.cleanedImage, "- length:", data.cleanedImage?.length || 0);
+        console.log("[Wardrobe] Full response data (truncated):", JSON.stringify(data).substring(0, 500));
+
+        const rawCategory = data.category || data.type || data.label || '';
+        const rawColor = data.color || data.colour || data.dominantColor || data.dominant_color || '';
+        const rawTexture = data.texture || data.material || data.fabric || 'plain';
+        const rawDesign = data.designPattern || data.pattern || data.design || data.style || 'none';
+
+        console.log("[Wardrobe] Extracted raw fields:", { rawCategory, rawColor, rawTexture, rawDesign });
         console.log("[Wardrobe] cleanedImageUrl present:", !!data.cleanedImageUrl);
         console.log("[Wardrobe] processedImage present:", !!data.processedImage);
         console.log("[Wardrobe] image present:", !!data.image);
@@ -169,12 +181,16 @@ export const wardrobeRouter = createTRPCRouter({
         // Handle different response formats from Firebase function
         // Check multiple possible field names the backend might use
         let cleanedImage: string | null = null;
-        const possibleImageFields = ['cleanedImage', 'processedImage', 'backgroundRemovedImage', 'segmentationImage', 'cleanedImageUrl', 'image', 'resultImage', 'outputImage'];
+        const possibleImageFields = [
+          'cleanedImage', 'processedImage', 'backgroundRemovedImage',
+          'segmentationImage', 'cleanedImageUrl', 'image', 'resultImage',
+          'outputImage', 'no_bg_image', 'nobg'
+        ];
         
         for (const field of possibleImageFields) {
-          if (data[field] && typeof data[field] === 'string' && data[field].length > 100) {
+          if (data[field] && typeof data[field] === 'string' && data[field].length > 50) {
             const imgData = data[field];
-            cleanedImage = imgData.startsWith('data:') || imgData.startsWith('http')
+            cleanedImage = (imgData.startsWith('data:') || imgData.startsWith('http'))
               ? imgData
               : `data:image/png;base64,${imgData}`;
             console.log(`[Wardrobe] Found cleaned image in field: ${field}`);
@@ -198,7 +214,7 @@ export const wardrobeRouter = createTRPCRouter({
         }
 
         // Validate category against valid options
-        let category = data.category?.toLowerCase()?.trim() || '';
+        let category = rawCategory.toLowerCase().trim();
         
         // Handle common variations and synonyms to map to our granular categories
         const categoryMap: Record<string, string> = {
@@ -218,6 +234,7 @@ export const wardrobeRouter = createTRPCRouter({
           'dress shoes': 'shoes',
           'oxfords': 'shoes',
           'loafers': 'shoes',
+          'necktie': 'tie',
           // Females
           'blouses': 'blouse',
           'tops': 'top',
@@ -240,6 +257,7 @@ export const wardrobeRouter = createTRPCRouter({
           'earrings': 'jewelry',
           'bracelet': 'jewelry',
           'ring': 'jewelry',
+          'necklaces': 'jewelry'
         };
 
         if (categoryMap[category]) {
@@ -255,14 +273,14 @@ export const wardrobeRouter = createTRPCRouter({
           if (matchedCat) {
             category = matchedCat;
           }
-          console.log("Category mapped:", data.category, "->", category);
+          console.log("[Wardrobe] Category final match check:", category, "is valid:", categoryIds.includes(category));
         }
 
           return {
-            category: category || data.category || 'unknown',
-            color: data.color || data.colour || data.dominantColor || 'unknown',
-            texture: data.texture || 'plain',
-            designPattern: data.designPattern || data.pattern || data.design || 'none',
+            category: category || rawCategory || 'unknown',
+            color: rawColor || 'unknown',
+            texture: rawTexture,
+            designPattern: rawDesign,
             cleanedImage: cleanedImage,
           };
 

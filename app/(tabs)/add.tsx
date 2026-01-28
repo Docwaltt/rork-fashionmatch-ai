@@ -126,10 +126,24 @@ export default function AddItemScreen() {
            console.log("[AddItem] Category from API not in valid list:", returnedCategory);
            // Try one last mapping check on the client side
            const lowercaseCat = returnedCategory.toLowerCase();
-           const match = validCategories.find(id => lowercaseCat.includes(id) || id.includes(lowercaseCat));
+           const match = validCategories.find(id =>
+             lowercaseCat.includes(id.toLowerCase()) ||
+             id.toLowerCase().includes(lowercaseCat)
+           );
            if (match) {
              console.log("[AddItem] Client-side category match found:", match);
              setSelectedCategory(match as ClothingCategory);
+           } else {
+             // Second pass: word by word matching
+             const words = lowercaseCat.split(/\s+/);
+             const wordMatch = validCategories.find(id => {
+               const idLower = id.toLowerCase();
+               return words.some(word => word.length > 3 && (idLower.includes(word) || word.includes(idLower)));
+             });
+             if (wordMatch) {
+               console.log("[AddItem] Client-side word-based match found:", wordMatch);
+               setSelectedCategory(wordMatch as ClothingCategory);
+             }
            }
         }
       }
