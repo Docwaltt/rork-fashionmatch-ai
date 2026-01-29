@@ -17,7 +17,8 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 
 export const db = getFirestore(app);
 export const storage = getStorage(app);
-export const functions = getFunctions(app);
+// Explicitly setting region to us-central1 to match backend deployment
+export const functions = getFunctions(app, 'us-central1');
 
 export const auth = getAuth(app);
 

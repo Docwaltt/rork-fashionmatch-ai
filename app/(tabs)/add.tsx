@@ -14,7 +14,8 @@ import {
   ScrollView,
   ActivityIndicator,
   StatusBar,
-  Platform
+  Platform,
+  Alert
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useMutation } from "@tanstack/react-query";
@@ -43,22 +44,46 @@ export default function AddItemScreen() {
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<ClothingCategory | null>(null);
   const [detectedColors, setDetectedColors] = useState<string[]>([]);
+  const [materialType, setMaterialType] = useState<string | null>(null);
+  const [hasPattern, setHasPattern] = useState<boolean | null>(null);
+  const [patternDescription, setPatternDescription] = useState<string | null>(null);
+
   const { addItem } = useWardrobe();
 
   const processImageMutation = useMutation({
     mutationFn: async (imageBase64: string) => {
       try {
-        const processClothing = httpsCallable(functions, 'processClothingFn');
-        const { data } = await processClothing({ image: imageBase64 });
-        return data as { category?: string; color?: string; cleanedImage?: string };
-      } catch (e) {
-        console.error("Processing failed", e);
-        throw e;
+        const processClothing = httpsCallable(functions, 'analyzeImage');
+        const { data } = await processClothing({ imgData: imageBase64 });
+        
+        const result = data as any;
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        
+        return result as { 
+          category?: string; 
+          color?: string; 
+          style?: string; 
+          confidence?: number;
+          cleanedImage?: string;
+          isBackgroundRemoved?: boolean;
+          materialType?: string;
+          hasPattern?: boolean;
+          patternDescription?: string;
+        };
+      } catch (e: any) {
+        console.error("Processing failed details:", e);
+        throw new Error(e.message || "Failed to process image");
       }
     },
     onSuccess: (data) => {
       if (data.cleanedImage) {
         setProcessedImage(data.cleanedImage);
+      } else {
+        setProcessedImage(capturedImage);
+        if (data.isBackgroundRemoved === false) {
+        }
       }
       
       if (data.category) {
@@ -74,11 +99,22 @@ export default function AddItemScreen() {
       if (data.color) {
         setDetectedColors([data.color]);
       }
+
+      if (data.materialType) {
+        setMaterialType(data.materialType);
+      }
+
+      if (data.hasPattern) {
+        setHasPattern(data.hasPattern);
+      }
+
+      if (data.patternDescription) {
+        setPatternDescription(data.patternDescription);
+      }
     },
     onError: (error) => {
        console.log("Error processing image", error);
-       // If fails, we still have the captured image, but we don't set processedImage
-       // User can manually select category
+       Alert.alert("Analysis Failed", error.message || "Could not analyze the image.");
     }
   });
 
@@ -87,7 +123,7 @@ export default function AddItemScreen() {
 
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
+        quality: 0.5, 
         base64: true,
       });
       
@@ -101,25 +137,31 @@ export default function AddItemScreen() {
       }
     } catch (error) {
       console.error("Error taking photo:", error);
+      Alert.alert("Error", "Failed to capture photo.");
     }
   };
 
   const handlePickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: "images" as const,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-      base64: true,
-    });
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: "images" as const,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+        base64: true,
+      });
 
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      setCapturedImage(asset.uri);
-      
-      if (asset.base64) {
-        processImageMutation.mutate(`data:image/jpeg;base64,${asset.base64}`);
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        setCapturedImage(asset.uri);
+        
+        if (asset.base64) {
+          processImageMutation.mutate(`data:image/jpeg;base64,${asset.base64}`);
+        }
       }
+    } catch (error) {
+       console.error("Error picking image:", error);
+       Alert.alert("Error", "Failed to select image.");
     }
   };
 
@@ -132,6 +174,9 @@ export default function AddItemScreen() {
       category: selectedCategory,
       colors: detectedColors,
       addedAt: Date.now(),
+      materialType: materialType,
+      hasPattern: hasPattern,
+      patternDescription: patternDescription,
     };
 
     addItem(newItem);
@@ -140,6 +185,9 @@ export default function AddItemScreen() {
     setProcessedImage(null);
     setSelectedCategory(null);
     setDetectedColors([]);
+    setMaterialType(null);
+    setHasPattern(null);
+    setPatternDescription(null);
     processImageMutation.reset();
     
     router.back();
@@ -150,6 +198,9 @@ export default function AddItemScreen() {
     setProcessedImage(null);
     setSelectedCategory(null);
     setDetectedColors([]);
+    setMaterialType(null);
+    setHasPattern(null);
+    setPatternDescription(null);
     processImageMutation.reset();
   };
 
@@ -239,7 +290,7 @@ export default function AddItemScreen() {
                   <View style={styles.processingOverlay}>
                     <BlurView intensity={20} style={StyleSheet.absoluteFill} />
                     <ActivityIndicator color={Colors.gold[400]} />
-                    <Text style={styles.processingText}>REMOVING BACKGROUND...</Text>
+                    <Text style={styles.processingText}>ANALYZING OUTFIT...</Text>
                   </View>
                 )}
               </View>

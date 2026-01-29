@@ -7,10 +7,17 @@ export type ClothingItem = {
   userId: string;
   imageUri: string;
   category: ClothingCategory;
-  colors: string[];
+  color: string;
+  style: string;
+  fabric?: string;
+  silhouette?: string;
+  confidence: number;
   season?: string;
   addedAt: number;
   name?: string;
+  materialType?: string;
+  hasPattern?: boolean;
+  patternDescription?: string;
 };
 
 export type OutfitSuggestion = {
