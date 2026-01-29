@@ -1,7 +1,7 @@
 import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Sparkles, Grid, Trash2, Edit3, X } from "lucide-react-native";
+import { Sparkles, Grid, Trash2, Edit3, X, Search } from "lucide-react-native";
 import { useState, useMemo } from "react";
 import {
   StyleSheet,
@@ -14,7 +14,8 @@ import {
   Pressable,
   Platform,
   StatusBar,
-  Alert
+  Alert,
+  TextInput
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -47,6 +48,8 @@ export default function WardrobeScreen() {
   const [editCategory, setEditCategory] = useState<ClothingCategory | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [styleWithItem, setStyleWithItem] = useState<ClothingItem | null>(null);
+  const [activeCategory, setActiveCategory] = useState<ClothingCategory | 'all'>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   const categories = useMemo(() => {
     if (userProfile?.gender) {
@@ -61,6 +64,29 @@ export default function WardrobeScreen() {
       { id: 'accessories' as ClothingCategory, label: 'Accs', icon: '👜' },
     ];
   }, [userProfile?.gender]);
+
+  const filteredItems = useMemo(() => {
+    let result = items;
+    
+    if (activeCategory !== 'all') {
+      result = result.filter(item => item.category === activeCategory);
+    }
+    
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      result = result.filter(item => {
+        const matchesColor = item.colors?.some(color => 
+          color.toLowerCase().includes(query)
+        );
+        const matchesCategory = item.category.toLowerCase().includes(query);
+        const matchesSeason = item.season?.toLowerCase().includes(query);
+        const matchesName = item.name?.toLowerCase().includes(query);
+        return matchesColor || matchesCategory || matchesSeason || matchesName;
+      });
+    }
+    
+    return result;
+  }, [items, activeCategory, searchQuery]);
 
   const handleStartStyling = () => {
     setShowStyleModal(true);
@@ -182,25 +208,72 @@ export default function WardrobeScreen() {
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
+            <View style={styles.searchContainer}>
+              <View style={styles.searchInputWrapper}>
+                <Search size={18} color={Colors.gray[500]} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search by color, pattern, season..."
+                  placeholderTextColor={Colors.gray[500]}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')}>
+                    <X size={16} color={Colors.gray[500]} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              style={styles.categoryFilterContainer}
+              contentContainerStyle={styles.categoryFilterContent}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.categoryChip,
+                  activeCategory === 'all' && styles.categoryChipActive
+                ]}
+                onPress={() => setActiveCategory('all')}
+              >
+                <Text style={[
+                  styles.categoryChipText,
+                  activeCategory === 'all' && styles.categoryChipTextActive
+                ]}>All</Text>
+              </TouchableOpacity>
+              {categories.map((cat) => (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={[
+                    styles.categoryChip,
+                    activeCategory === cat.id && styles.categoryChipActive
+                  ]}
+                  onPress={() => setActiveCategory(cat.id as ClothingCategory)}
+                >
+                  <Text style={styles.categoryChipIcon}>{cat.icon}</Text>
+                  <Text style={[
+                    styles.categoryChipText,
+                    activeCategory === cat.id && styles.categoryChipTextActive
+                  ]}>{cat.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
             <View style={styles.statsContainer}>
               <View style={styles.statsWrapper}>
                 <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{filteredItems.length}</Text>
+                  <Text style={styles.statLabel}>{activeCategory === 'all' ? 'SHOWING' : 'FILTERED'}</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
                   <Text style={styles.statNumber}>{items.length}</Text>
                   <Text style={styles.statLabel}>TOTAL</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={styles.statNumber}>
-                    {items.filter((item) => item.category === "top").length}
-                  </Text>
-                  <Text style={styles.statLabel}>TOPS</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={styles.statNumber}>
-                    {items.filter((item) => item.category === "bottom").length}
-                  </Text>
-                  <Text style={styles.statLabel}>BOTTOMS</Text>
                 </View>
               </View>
             </View>
@@ -215,7 +288,22 @@ export default function WardrobeScreen() {
             </View>
 
             <View style={styles.grid}>
-              {items.map((item) => (
+              {filteredItems.length === 0 ? (
+                <View style={styles.noResultsContainer}>
+                  <Text style={styles.noResultsText}>
+                    {searchQuery ? `No items matching "${searchQuery}"` : `No ${activeCategory} items yet`}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.clearFilterButton}
+                    onPress={() => {
+                      setSearchQuery('');
+                      setActiveCategory('all');
+                    }}
+                  >
+                    <Text style={styles.clearFilterButtonText}>CLEAR FILTERS</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : filteredItems.map((item) => (
                 <TouchableOpacity
                   key={item.id}
                   style={styles.gridItem}
@@ -471,7 +559,88 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100, // Space for tab bar
+    paddingBottom: 100,
+  },
+  searchContainer: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.gray[50],
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: Colors.gray[100],
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.white,
+    letterSpacing: 0.3,
+  },
+  categoryFilterContainer: {
+    marginTop: 16,
+    maxHeight: 50,
+  },
+  categoryFilterContent: {
+    paddingHorizontal: 24,
+    gap: 10,
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.gray[200],
+    backgroundColor: 'transparent',
+  },
+  categoryChipActive: {
+    borderColor: Colors.gold[400],
+    backgroundColor: 'rgba(212, 175, 55, 0.1)',
+  },
+  categoryChipIcon: {
+    fontSize: 14,
+  },
+  categoryChipText: {
+    fontSize: 12,
+    color: Colors.gray[500],
+    fontWeight: '600' as const,
+    letterSpacing: 0.5,
+  },
+  categoryChipTextActive: {
+    color: Colors.gold[400],
+  },
+  noResultsContainer: {
+    width: '100%',
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 24,
+  },
+  noResultsText: {
+    fontSize: 14,
+    color: Colors.gray[500],
+    textAlign: 'center' as const,
+    marginBottom: 20,
+    letterSpacing: 0.5,
+  },
+  clearFilterButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: Colors.gold[400],
+  },
+  clearFilterButtonText: {
+    fontSize: 12,
+    color: Colors.gold[400],
+    fontWeight: '700' as const,
+    letterSpacing: 1,
   },
   statsContainer: {
     paddingHorizontal: 24,
