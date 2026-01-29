@@ -10,6 +10,8 @@ export type ClothingItem = {
   color: string;
   style: string;
   fabric?: string;
+  texture?: string; // Added
+  designPattern?: string; // Added
   silhouette?: string;
   confidence: number;
   season?: string;

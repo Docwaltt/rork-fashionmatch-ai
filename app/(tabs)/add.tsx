@@ -295,6 +295,9 @@ export default function AddItemScreen() {
       materialType: materialType ?? undefined,
       hasPattern: hasPattern ?? undefined,
       patternDescription: patternDescription ?? undefined,
+      texture: detectedTexture ?? undefined,
+      designPattern: detectedDesign ?? undefined,
+      fabric: detectedTexture ?? undefined,
       color: detectedColors[0] || 'unknown',
       style: 'casual', // default, user can edit later
       confidence: 1.0, // manually added
@@ -324,6 +327,9 @@ export default function AddItemScreen() {
       materialType: materialType ?? undefined,
       hasPattern: hasPattern ?? undefined,
       patternDescription: patternDescription ?? undefined,
+      texture: detectedTexture ?? undefined,
+      designPattern: detectedDesign ?? undefined,
+      fabric: detectedTexture ?? undefined,
     };
 
     addItem(newItem);
