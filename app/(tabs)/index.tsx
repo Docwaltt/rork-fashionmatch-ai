@@ -369,17 +369,21 @@ export default function WardrobeScreen() {
                     )}
                     
                     <View style={styles.detailsGrid}>
-                      {selectedItem.texture && (
+                      {(selectedItem.texture || selectedItem.fabric) && (
                         <View style={styles.detailGridItem}>
                           <Text style={styles.detailLabel}>TEXTURE</Text>
-                          <Text style={styles.detailValue}>{selectedItem.texture.toUpperCase()}</Text>
+                          <Text style={styles.detailValue}>
+                            {(selectedItem.texture || selectedItem.fabric || '').toUpperCase()}
+                          </Text>
                         </View>
                       )}
 
-                      {selectedItem.designPattern && (
+                      {(selectedItem.designPattern || selectedItem.style) && (
                         <View style={styles.detailGridItem}>
                           <Text style={styles.detailLabel}>DESIGN</Text>
-                          <Text style={styles.detailValue}>{selectedItem.designPattern.toUpperCase()}</Text>
+                          <Text style={styles.detailValue}>
+                            {(selectedItem.designPattern || selectedItem.style || '').toUpperCase()}
+                          </Text>
                         </View>
                       )}
                     </View>

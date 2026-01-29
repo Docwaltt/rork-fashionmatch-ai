@@ -278,8 +278,11 @@ export default function AddItemScreen() {
       imageUri: processedImage,
       category: selectedCategory,
       colors: detectedColors,
+      color: detectedColors[0] || undefined,
       texture: detectedTexture || undefined,
+      fabric: detectedTexture || undefined,
       designPattern: (detectedDesign && detectedDesign !== 'none') ? detectedDesign : undefined,
+      style: (detectedDesign && detectedDesign !== 'none') ? detectedDesign : undefined,
       addedAt: Date.now(),
     };
 
@@ -300,8 +303,11 @@ export default function AddItemScreen() {
       imageUri: processedImage,
       category: selectedCategory,
       colors: detectedColors,
+      color: detectedColors[0] || undefined,
       texture: detectedTexture || undefined,
+      fabric: detectedTexture || undefined,
       designPattern: (detectedDesign && detectedDesign !== 'none') ? detectedDesign : undefined,
+      style: (detectedDesign && detectedDesign !== 'none') ? detectedDesign : undefined,
       addedAt: Date.now(),
     };
 
