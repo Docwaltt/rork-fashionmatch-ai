@@ -3,7 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Camera, ImageIcon, X, RefreshCcw, AlertCircle, CheckCircle } from "lucide-react-native";
+import { Camera, ImageIcon, X, RefreshCcw, AlertCircle, CheckCircle, RotateCcw } from "lucide-react-native";
 import { useState, useRef, useMemo } from "react";
 import {
   StyleSheet,
@@ -440,6 +440,18 @@ export default function AddItemScreen() {
                 <View style={styles.errorBanner}>
                   <AlertCircle size={16} color={Colors.gold[400]} />
                   <Text style={styles.errorText}>{analysisError}</Text>
+                  <TouchableOpacity 
+                    style={styles.retryButton}
+                    onPress={() => {
+                      if (capturedImage) {
+                        setAnalysisError(null);
+                        handleProcessImage(capturedImage);
+                      }
+                    }}
+                  >
+                    <RotateCcw size={14} color={Colors.gold[400]} />
+                    <Text style={styles.retryButtonText}>RETRY</Text>
+                  </TouchableOpacity>
                 </View>
               )}
               
@@ -826,6 +838,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     flex: 1,
     letterSpacing: 0.5,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: Colors.gold[400],
+    marginLeft: 8,
+  },
+  retryButtonText: {
+    color: Colors.gold[400],
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
   detectedInfoChip: {
     paddingHorizontal: 12,
