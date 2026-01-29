@@ -42,14 +42,8 @@ if (getApps().length === 0) {
 
 export const db = getFirestore(app);
 export const storage = getStorage(app);
-<<<<<<< HEAD
 // Explicitly setting region to us-central1 to match backend deployment
 export const functions = getFunctions(app, 'us-central1');
-
-export const auth = getAuth(app);
-=======
-export const functions = getFunctions(app, 'us-central1');
 export { auth };
->>>>>>> ec64eec71921b2c8b8b2833da4536b1beaf2685d
 
 export default app;
