@@ -24,8 +24,8 @@ export const ClothingSchema = z.object({
 });
 
 const ai = genkit({
-  plugins: [googleAI()], // The plugin will pick up the env var automatically
-  model: googleAI.model('gemini-3-pro-preview'),
+  plugins: [googleAI()], 
+  model: googleAI.model('gemini-3-pro-preview'), // Kept as requested
 });
 
 export const processClothing = ai.defineFlow(
@@ -55,8 +55,9 @@ export const processClothing = ai.defineFlow(
     let cleanedImageBase64: string | undefined;
     let isBackgroundRemoved = false;
 
+    // Background Removal Logic
     try {
-      console.log("Attempting background removal...");
+      console.log("Attempting background removal with @imgly/background-removal-node...");
       const { removeBackground } = await import('@imgly/background-removal-node');
 
       let inputBuffer: Buffer;
@@ -67,33 +68,31 @@ export const processClothing = ai.defineFlow(
         inputBuffer = Buffer.from(arrayBuffer);
       } else {
         // Handle Base64
-        // 1. Remove data URI header if present
         let base64Data = imageUri.replace(/^data:image\/\w+;base64,/, "");
-        // 2. Remove whitespace/newlines which can corrupt buffers
         base64Data = base64Data.replace(/\s/g, '');
-        
         inputBuffer = Buffer.from(base64Data, 'base64');
         console.log(`Created buffer size: ${inputBuffer.length} bytes`);
       }
 
-      // 3. Configure imgly to be more robust? (defaults are usually fine)
+      // Explicitly configure if needed, but defaults are usually best for now unless we know path issues.
+      // We will add logic to ensure success is logged.
       const blobOutput = await removeBackground(inputBuffer);
       const arrayBuffer = await blobOutput.arrayBuffer();
       const bufferOutput = Buffer.from(arrayBuffer);
       
       cleanedImageBase64 = `data:image/png;base64,${bufferOutput.toString('base64')}`;
-      console.log("Background removed successfully.");
+      console.log("Background removed successfully. Output length:", cleanedImageBase64.length);
       
       imageForGemini = cleanedImageBase64;
       isBackgroundRemoved = true;
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Background removal failed, using original:", error);
+      // Log more details
+      if (error.message) console.error("Error message:", error.message);
       
-      // Fallback: Construct valid Data URI for Gemini
-      // If it doesn't have a prefix, assume JPEG (most common for photos) or try to detect
+      // Fallback
       if (!imageUri.startsWith('http') && !imageUri.startsWith('data:')) {
-        // Simple heuristic: if it starts with 'iVBOR', it's PNG. Otherwise assume JPEG.
         const isPng = imageUri.trim().startsWith('iVBOR');
         const mime = isPng ? 'image/png' : 'image/jpeg';
         imageForGemini = `data:${mime};base64,${imageUri.trim()}`;
@@ -102,20 +101,26 @@ export const processClothing = ai.defineFlow(
       }
     }
 
+    // Gemini Analysis Logic
     try {
       console.log("Sending to Gemini...");
+      
+      // We enforce the schema with strict instructions
       const response = await ai.generate({
         prompt: [
           { text: `
             You are the lead fashion stylist for Dressya. 
-            Analyze the provided clothing image.
-            1. Identify the exact fabric texture (e.g., knit, denim, silk).
-            2. Identify the material of the cloth (e.g., Cotton, Polyester, Wool).
-            3. Describe the silhouette (e.g., oversized, tailored, A-line).
-            4. Does the clothing have a pattern? If so, describe the pattern.
-            5. Categorize it for the Dressya calendar (e.g., Professional, Casual, Evening).
-            6. Extract standard category, color, and style information.
-            7. IMPORTANT: Ensure that the clothing item is fully visible and the background is removed in the final image.
+            Analyze the provided clothing image deeply.
+            
+            MANDATORY FIELDS TO EXTRACT:
+            1. fabric: Identify the texture (e.g., ribbed, smooth, knitted).
+            2. materialType: Identify the material (e.g., Cotton, Polyester, Denim).
+            3. hasPattern: Boolean true/false.
+            4. patternDescription: Describe the pattern if present (or "Solid" if none).
+            5. category: The specific item type.
+            6. color: Dominant color.
+            
+            Return ALL fields in the JSON schema.
           `},
           { media: { url: imageForGemini } },
         ],
@@ -125,10 +130,11 @@ export const processClothing = ai.defineFlow(
       const result = response.output;
       if (!result) throw new Error("Empty AI response");
 
-      console.log("Gemini success.");
+      console.log("Gemini success. Result keys:", Object.keys(result));
+      
       return {
         ...result,
-        cleanedImage: cleanedImageBase64,
+        cleanedImage: cleanedImageBase64 || null, // Ensure we return the cleaned image if it exists
         isBackgroundRemoved
       };
 

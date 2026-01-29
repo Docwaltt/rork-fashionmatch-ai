@@ -4,14 +4,14 @@ import { processClothing } from './genkit.js';
 
 // 1. Callable Function (for direct usage from App via SDK)
 export const analyzeImage = onCallGenkit({
-  memory: '2GiB' as any,
+  memory: '2GiB' as any, // Genkit wrapper might have strict types, check if 4GiB is allowed here
   timeoutSeconds: 300,
   region: 'us-central1'
 }, processClothing);
 
 // 2. HTTP Function (for usage via tRPC backend or raw HTTP fetch)
 export const processClothingFn = onRequest({
-  memory: '2GiB',
+  memory: '4GiB', // Increased memory for background removal
   timeoutSeconds: 300,
   region: 'us-central1',
   cors: true, 
