@@ -170,8 +170,12 @@ export const wardrobeRouter = createTRPCRouter({
         const rawColor = data.color || data.colour || data.dominantColor || data.dominant_color || '';
         const rawTexture = data.texture || data.material || data.fabric || 'plain';
         const rawDesign = data.designPattern || data.pattern || data.design || data.style || 'none';
+        const rawFabric = data.fabric || data.texture || data.material || 'unknown';
+        const rawPattern = data.patternDescription || data.pattern || data.designPattern || 'none';
+        const rawHasPattern = data.hasPattern || false;
+        const rawMaterialType = data.materialType || data.material || 'unknown';
 
-        console.log("[Wardrobe] Extracted raw fields:", { rawCategory, rawColor, rawTexture, rawDesign });
+        console.log("[Wardrobe] Extracted raw fields:", { rawCategory, rawColor, rawTexture, rawDesign, rawFabric, rawPattern, rawHasPattern, rawMaterialType });
         console.log("[Wardrobe] cleanedImageUrl present:", !!data.cleanedImageUrl);
         console.log("[Wardrobe] processedImage present:", !!data.processedImage);
         console.log("[Wardrobe] image present:", !!data.image);
@@ -281,6 +285,10 @@ export const wardrobeRouter = createTRPCRouter({
             texture: rawTexture,
             designPattern: rawDesign,
             cleanedImage: cleanedImage,
+            fabric: rawFabric,
+            patternDescription: rawPattern,
+            hasPattern: rawHasPattern,
+            materialType: rawMaterialType,
           };
 
         } catch (error: any) {
