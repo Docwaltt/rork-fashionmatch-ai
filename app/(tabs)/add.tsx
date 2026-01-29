@@ -111,11 +111,11 @@ export default function AddItemScreen() {
       if (data.color) {
         setDetectedColors([data.color]);
       }
-      if (data.texture) {
-        setDetectedTexture(data.texture);
+      if (data.texture || (data as any).fabric) {
+        setDetectedTexture(data.texture || (data as any).fabric);
       }
-      if (data.designPattern) {
-        setDetectedDesign(data.designPattern);
+      if (data.designPattern || (data as any).style) {
+        setDetectedDesign(data.designPattern || (data as any).style);
       }
       if (data.category) {
         const validCategories = categories.map(c => c.id);
@@ -278,11 +278,12 @@ export default function AddItemScreen() {
       imageUri: processedImage,
       category: selectedCategory,
       colors: detectedColors,
-      color: detectedColors[0] || undefined,
+      color: detectedColors[0] || "unknown",
       texture: detectedTexture || undefined,
-      fabric: detectedTexture || undefined,
+      fabric: detectedTexture || "plain",
       designPattern: (detectedDesign && detectedDesign !== 'none') ? detectedDesign : undefined,
-      style: (detectedDesign && detectedDesign !== 'none') ? detectedDesign : undefined,
+      style: (detectedDesign && detectedDesign !== 'none') ? detectedDesign : "casual",
+      confidence: 0.95,
       addedAt: Date.now(),
     };
 
@@ -303,11 +304,12 @@ export default function AddItemScreen() {
       imageUri: processedImage,
       category: selectedCategory,
       colors: detectedColors,
-      color: detectedColors[0] || undefined,
+      color: detectedColors[0] || "unknown",
       texture: detectedTexture || undefined,
-      fabric: detectedTexture || undefined,
+      fabric: detectedTexture || "plain",
       designPattern: (detectedDesign && detectedDesign !== 'none') ? detectedDesign : undefined,
-      style: (detectedDesign && detectedDesign !== 'none') ? detectedDesign : undefined,
+      style: (detectedDesign && detectedDesign !== 'none') ? detectedDesign : "casual",
+      confidence: 0.95,
       addedAt: Date.now(),
     };
 

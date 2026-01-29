@@ -8,19 +8,20 @@ export type ClothingItem = {
   imageUri: string;
   category: ClothingCategory;
   colors: string[];
-  color?: string;
-  style?: string;
-  texture?: string;
-  designPattern?: string;
+  color: string;
+  style: string;
   fabric?: string;
   silhouette?: string;
-  confidence?: number;
+  confidence: number;
   season?: string;
   addedAt: number;
   name?: string;
   materialType?: string;
   hasPattern?: boolean;
   patternDescription?: string;
+  // Legacy fields for compatibility
+  texture?: string;
+  designPattern?: string;
 };
 
 export type OutfitSuggestion = {

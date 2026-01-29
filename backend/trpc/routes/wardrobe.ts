@@ -207,6 +207,8 @@ export const wardrobeRouter = createTRPCRouter({
           return {
             category: data.category?.toLowerCase()?.trim() || 'unknown',
             color: data.color || data.dominantColor || 'unknown',
+            style: data.style || data.designPattern || 'casual',
+            confidence: data.confidence || 0.5,
             cleanedImage: null,
             backgroundRemovalFailed: true,
           };
@@ -279,7 +281,10 @@ export const wardrobeRouter = createTRPCRouter({
             category: category || rawCategory || 'unknown',
             color: rawColor || 'unknown',
             texture: rawTexture,
+            fabric: rawTexture,
             designPattern: rawDesign,
+            style: rawDesign,
+            confidence: data.confidence || 0.9,
             cleanedImage: cleanedImage,
           };
 
