@@ -10,23 +10,54 @@ if (!apiKey) {
 }
 
 export const ClothingSchema = z.object({
-  category: z.string().describe('Type of item (e.g., Denim Jacket)'),
+  category: z.string().describe('Type of item (e.g., Denim Jacket, T-Shirt, Jeans)'),
   color: z.string().describe('Primary color detected'),
-  style: z.string().describe('Fashion style (e.g., Vintage, Streetwear)'),
+  style: z.string().describe('Fashion style (e.g., Casual, Formal, Vintage, Streetwear)'),
   confidence: z.number().describe('AI certainty score from 0 to 1'),
   cleanedImage: z.string().optional().describe('Base64 string of the image with background removed'),
   isBackgroundRemoved: z.boolean().describe('Whether the background removal process was successful'),
-  fabric: z.string().optional().describe('Fabric texture (e.g., knit, denim, silk)'),
-  silhouette: z.string().optional().describe('Item silhouette (e.g., oversized, tailored, A-line)'),
+  fabric: z.string().optional().describe('Fabric texture (e.g., knit, denim, silk, cotton, leather)'),
+  silhouette: z.string().optional().describe('Item silhouette (e.g., oversized, tailored, A-line, slim)'),
   materialType: z.string().optional().describe('Material of the cloth (e.g., Cotton, Polyester, Wool)'),
   hasPattern: z.boolean().optional().describe('Whether the cloth has patterns or not'),
-  patternDescription: z.string().optional().describe('A description of the pattern if it exists'),
+  patternDescription: z.string().optional().describe('A description of the pattern if it exists (e.g., floral, striped, plaid)'),
 });
 
 const ai = genkit({
   plugins: [googleAI()], 
   model: googleAI.model('gemini-3-pro-preview'), // Kept as requested
 });
+
+// Helper function for Clipdrop API
+async function removeBackgroundWithClipdrop(imageBuffer: Buffer): Promise<string> {
+  const apiKey = "1326cbba949781dca12469e38098136f85ccb6e39f8f8be855d9748379f2b9b4bb7a9536ec76a4cda971db58ed5d6f8b"; 
+  
+  // Create a Blob from the buffer (Node 20+)
+  const blob = new Blob([imageBuffer], { type: 'image/jpeg' });
+  
+  const formData = new FormData();
+  formData.append('image_file', blob, 'image.jpg');
+
+  console.log("Sending request to Clipdrop API...");
+  const response = await fetch('https://clipdrop-api.co/remove-background/v1', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Clipdrop API failed: ${response.status}`, errorText);
+    throw new Error(`Clipdrop API failed: ${response.status} ${errorText}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const bufferOutput = Buffer.from(arrayBuffer);
+  
+  return `data:image/png;base64,${bufferOutput.toString('base64')}`;
+}
 
 export const processClothing = ai.defineFlow(
   {
@@ -55,13 +86,9 @@ export const processClothing = ai.defineFlow(
     let cleanedImageBase64: string | undefined;
     let isBackgroundRemoved = false;
 
-    // Background Removal Logic
+    // Create Input Buffer for Background Removal
+    let inputBuffer: Buffer | null = null;
     try {
-      console.log("Attempting background removal with @imgly/background-removal-node...");
-      const { removeBackground } = await import('@imgly/background-removal-node');
-
-      let inputBuffer: Buffer;
-      
       if (imageUri.startsWith('http')) {
         const response = await fetch(imageUri);
         const arrayBuffer = await response.arrayBuffer();
@@ -73,26 +100,45 @@ export const processClothing = ai.defineFlow(
         inputBuffer = Buffer.from(base64Data, 'base64');
         console.log(`Created buffer size: ${inputBuffer.length} bytes`);
       }
+    } catch (e) {
+      console.error("Failed to create input buffer:", e);
+    }
 
-      // Explicitly configure if needed, but defaults are usually best for now unless we know path issues.
-      // We will add logic to ensure success is logged.
-      const blobOutput = await removeBackground(inputBuffer);
-      const arrayBuffer = await blobOutput.arrayBuffer();
-      const bufferOutput = Buffer.from(arrayBuffer);
-      
-      cleanedImageBase64 = `data:image/png;base64,${bufferOutput.toString('base64')}`;
-      console.log("Background removed successfully. Output length:", cleanedImageBase64.length);
-      
-      imageForGemini = cleanedImageBase64;
-      isBackgroundRemoved = true;
+    // Background Removal Logic (Default: Clipdrop)
+    if (inputBuffer) {
+      try {
+        console.log("Attempting background removal with Clipdrop API...");
+        cleanedImageBase64 = await removeBackgroundWithClipdrop(inputBuffer);
+        console.log("Background removed successfully via Clipdrop. Output length:", cleanedImageBase64.length);
+        
+        imageForGemini = cleanedImageBase64;
+        isBackgroundRemoved = true;
+      } catch (clipdropError: any) {
+        console.error("Clipdrop failed:", clipdropError);
+        
+        // Optional: Fallback to @imgly/background-removal-node if Clipdrop fails?
+        // User requested Clipdrop as default. We can try fallback if we want robustness.
+        try {
+          console.log("Falling back to @imgly/background-removal-node...");
+          const { removeBackground } = await import('@imgly/background-removal-node');
+          
+          const blobOutput = await removeBackground(inputBuffer);
+          const arrayBuffer = await blobOutput.arrayBuffer();
+          const bufferOutput = Buffer.from(arrayBuffer);
+          
+          cleanedImageBase64 = `data:image/png;base64,${bufferOutput.toString('base64')}`;
+          console.log("Background removed successfully via @imgly.");
+          imageForGemini = cleanedImageBase64;
+          isBackgroundRemoved = true;
+        } catch (imglyError: any) {
+           console.error("Fallback @imgly also failed:", imglyError);
+        }
+      }
+    }
 
-    } catch (error: any) {
-      console.error("Background removal failed, using original:", error);
-      // Log more details
-      if (error.message) console.error("Error message:", error.message);
-      
-      // Fallback
-      if (!imageUri.startsWith('http') && !imageUri.startsWith('data:')) {
+    // Ensure imageForGemini is valid if background removal failed
+    if (!isBackgroundRemoved) {
+       if (!imageUri.startsWith('http') && !imageUri.startsWith('data:')) {
         const isPng = imageUri.trim().startsWith('iVBOR');
         const mime = isPng ? 'image/png' : 'image/jpeg';
         imageForGemini = `data:${mime};base64,${imageUri.trim()}`;
@@ -105,7 +151,6 @@ export const processClothing = ai.defineFlow(
     try {
       console.log("Sending to Gemini...");
       
-      // We enforce the schema with strict instructions
       const response = await ai.generate({
         prompt: [
           { text: `

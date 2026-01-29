@@ -516,6 +516,17 @@ export default function AddItemScreen() {
                   </View>
                 )}
 
+                {materialType && (
+                  <View style={{ flex: 1, minWidth: '45%' }}>
+                    <Text style={styles.sectionTitle}>MATERIAL</Text>
+                    <View style={styles.detectedInfoChip}>
+                      <Text style={styles.detectedInfoText}>
+                        {materialType.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
                 {detectedDesign && detectedDesign !== 'none' && (
                   <View style={{ flex: 1, minWidth: '45%' }}>
                     <Text style={styles.sectionTitle}>DESIGN</Text>
