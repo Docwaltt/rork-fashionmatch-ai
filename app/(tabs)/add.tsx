@@ -292,9 +292,9 @@ export default function AddItemScreen() {
       category: selectedCategory,
       colors: detectedColors,
       addedAt: Date.now(),
-      materialType: materialType,
-      hasPattern: hasPattern,
-      patternDescription: patternDescription,
+      materialType: materialType ?? undefined,
+      hasPattern: hasPattern ?? undefined,
+      patternDescription: patternDescription ?? undefined,
       color: detectedColors[0] || 'unknown',
       style: 'casual', // default, user can edit later
       confidence: 1.0, // manually added
@@ -321,9 +321,9 @@ export default function AddItemScreen() {
       color: detectedColors[0] || 'unknown',
       style: 'casual', 
       confidence: 1.0,
-      materialType: materialType,
-      hasPattern: hasPattern,
-      patternDescription: patternDescription,
+      materialType: materialType ?? undefined,
+      hasPattern: hasPattern ?? undefined,
+      patternDescription: patternDescription ?? undefined,
     };
 
     addItem(newItem);
