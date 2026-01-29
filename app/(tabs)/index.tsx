@@ -46,6 +46,7 @@ export default function WardrobeScreen() {
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [editCategory, setEditCategory] = useState<ClothingCategory | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [styleWithItem, setStyleWithItem] = useState<ClothingItem | null>(null);
 
   const categories = useMemo(() => {
     if (userProfile?.gender) {
@@ -67,7 +68,20 @@ export default function WardrobeScreen() {
 
   const handleEventSelect = (eventId: string) => {
     setShowStyleModal(false);
-    router.push(`/styling?event=${eventId}` as any);
+    if (styleWithItem) {
+      router.push(`/styling?event=${eventId}&selectedItemId=${styleWithItem.id}` as any);
+      setStyleWithItem(null);
+    } else {
+      router.push(`/styling?event=${eventId}` as any);
+    }
+  };
+
+  const handleStyleWithItem = () => {
+    if (selectedItem) {
+      setStyleWithItem(selectedItem);
+      setSelectedItem(null);
+      setShowStyleModal(true);
+    }
   };
 
   const handleDeleteItem = () => {
@@ -277,6 +291,14 @@ export default function WardrobeScreen() {
                       Added {new Date(selectedItem.addedAt).toLocaleDateString()}
                     </Text>
                     
+                    <TouchableOpacity 
+                      style={styles.styleWithItemButton} 
+                      onPress={handleStyleWithItem}
+                    >
+                      <Sparkles size={18} color={Colors.richBlack} />
+                      <Text style={styles.styleWithItemButtonText}>STYLE ME WITH THIS</Text>
+                    </TouchableOpacity>
+                    
                     <View style={styles.modalActions}>
                       <TouchableOpacity 
                         style={styles.editButton} 
@@ -362,7 +384,7 @@ export default function WardrobeScreen() {
               <View style={styles.styleModalHandle} />
               <Text style={styles.styleModalTitle}>SELECT OCCASION</Text>
               <Text style={styles.styleModalSubtitle}>
-                Where are you going today?
+                {styleWithItem ? `Style your ${styleWithItem.category} for...` : "Where are you going today?"}
               </Text>
               <ScrollView style={styles.eventList}>
                 {EVENT_TYPES.map((event) => (
@@ -707,6 +729,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#E53935',
+    letterSpacing: 1,
+  },
+  styleWithItemButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    backgroundColor: Colors.gold[400],
+    marginBottom: 12,
+  },
+  styleWithItemButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.richBlack,
     letterSpacing: 1,
   },
   editCategoryGrid: {
