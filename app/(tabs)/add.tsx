@@ -278,6 +278,8 @@ export default function AddItemScreen() {
       imageUri: processedImage,
       category: selectedCategory,
       colors: detectedColors,
+      texture: detectedTexture || undefined,
+      designPattern: (detectedDesign && detectedDesign !== 'none') ? detectedDesign : undefined,
       addedAt: Date.now(),
     };
 
@@ -298,6 +300,8 @@ export default function AddItemScreen() {
       imageUri: processedImage,
       category: selectedCategory,
       colors: detectedColors,
+      texture: detectedTexture || undefined,
+      designPattern: (detectedDesign && detectedDesign !== 'none') ? detectedDesign : undefined,
       addedAt: Date.now(),
     };
 
@@ -455,11 +459,11 @@ export default function AddItemScreen() {
                 </View>
               )}
               
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
+              <View style={styles.detectedInfoRow}>
                 {detectedColors.length > 0 && (
-                  <View style={{ flex: 1, minWidth: '45%' }}>
+                  <View style={styles.detectedInfoSection}>
                     <Text style={styles.sectionTitle}>COLOR</Text>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <View style={styles.colorChips}>
                       {detectedColors.map((color, index) => (
                         <View key={index} style={styles.detectedInfoChip}>
                           <Text style={styles.detectedInfoText}>
@@ -472,7 +476,7 @@ export default function AddItemScreen() {
                 )}
 
                 {detectedTexture && (
-                  <View style={{ flex: 1, minWidth: '45%' }}>
+                  <View style={styles.detectedInfoSection}>
                     <Text style={styles.sectionTitle}>TEXTURE</Text>
                     <View style={styles.detectedInfoChip}>
                       <Text style={styles.detectedInfoText}>
@@ -483,7 +487,7 @@ export default function AddItemScreen() {
                 )}
 
                 {detectedDesign && detectedDesign !== 'none' && (
-                  <View style={{ flex: 1, minWidth: '45%' }}>
+                  <View style={styles.detectedInfoSection}>
                     <Text style={styles.sectionTitle}>DESIGN</Text>
                     <View style={styles.detectedInfoChip}>
                       <Text style={styles.detectedInfoText}>
@@ -886,5 +890,19 @@ const styles = StyleSheet.create({
     flex: 1,
     letterSpacing: 0.5,
     fontWeight: '500',
+  },
+  detectedInfoRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginBottom: 24,
+  },
+  detectedInfoSection: {
+    flex: 1,
+    minWidth: '45%',
+  },
+  colorChips: {
+    flexDirection: 'row',
+    gap: 8,
   },
 });

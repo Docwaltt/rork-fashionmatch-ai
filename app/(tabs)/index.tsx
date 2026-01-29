@@ -368,6 +368,22 @@ export default function WardrobeScreen() {
                       </View>
                     )}
                     
+                    <View style={styles.detailsGrid}>
+                      {selectedItem.texture && (
+                        <View style={styles.detailGridItem}>
+                          <Text style={styles.detailLabel}>TEXTURE</Text>
+                          <Text style={styles.detailValue}>{selectedItem.texture.toUpperCase()}</Text>
+                        </View>
+                      )}
+
+                      {selectedItem.designPattern && (
+                        <View style={styles.detailGridItem}>
+                          <Text style={styles.detailLabel}>DESIGN</Text>
+                          <Text style={styles.detailValue}>{selectedItem.designPattern.toUpperCase()}</Text>
+                        </View>
+                      )}
+                    </View>
+
                     {selectedItem.season && (
                       <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>SEASON</Text>
@@ -1032,5 +1048,15 @@ const styles = StyleSheet.create({
   },
   arrowContainer: {
     opacity: 0.5,
+  },
+  detailsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginBottom: 16,
+  },
+  detailGridItem: {
+    flex: 1,
+    minWidth: '45%',
   },
 });
