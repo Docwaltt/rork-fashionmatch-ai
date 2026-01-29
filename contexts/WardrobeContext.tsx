@@ -6,6 +6,13 @@ import { db, storage, auth } from "@/lib/firebase";
 import { collection, getDocs, deleteDoc, doc, query, where, setDoc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
+// Helper to sanitize data for Firestore (removes undefined values)
+const sanitizeForFirestore = (data: any) => {
+  return Object.fromEntries(
+    Object.entries(data).filter(([_, v]) => v !== undefined)
+  );
+};
+
 export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
   const [items, setItems] = useState<ClothingItem[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -79,7 +86,10 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
       
       console.log('[WardrobeContext] Adding item to Firestore:', itemWithUser.category);
       // Use setDoc with the ID we generated in the UI
-      await setDoc(doc(db, "wardrobe", item.id), itemWithUser);
+      // Sanitize data to remove undefined fields which Firestore rejects
+      const cleanItem = sanitizeForFirestore(itemWithUser);
+      
+      await setDoc(doc(db, "wardrobe", item.id), cleanItem);
       console.log('[WardrobeContext] Item added successfully with ID:', item.id);
       return itemWithUser;
     },
@@ -125,7 +135,11 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
       
       console.log('[WardrobeContext] Updating item in Firestore:', item.id);
       const { id, ...updateData } = item;
-      await updateDoc(doc(db, "wardrobe", id), updateData);
+      
+      // Sanitize update data as well
+      const cleanUpdateData = sanitizeForFirestore(updateData);
+      
+      await updateDoc(doc(db, "wardrobe", id), cleanUpdateData);
       console.log('[WardrobeContext] Item updated successfully');
       return item;
     },
