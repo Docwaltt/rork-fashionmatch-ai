@@ -30,8 +30,12 @@ const ai = genkit({
 
 // Helper function for Clipdrop API
 async function removeBackgroundWithClipdrop(imageBuffer: Buffer): Promise<string> {
-  const apiKey = "1326cbba949781dca12469e38098136f85ccb6e39f8f8be855d9748379f2b9b4bb7a9536ec76a4cda971db58ed5d6f8b"; 
+  const apiKey = process.env.CLIPDROP_API_KEY; 
   
+  if (!apiKey) {
+    throw new Error("CLIPDROP_API_KEY is not set in environment variables.");
+  }
+
   // Create a Blob from the buffer (Node 20+)
   // Cast to Uint8Array to avoid TS issues with SharedArrayBuffer
   const blob = new Blob([new Uint8Array(imageBuffer)], { type: 'image/jpeg' });
@@ -115,7 +119,7 @@ export const processClothing = ai.defineFlow(
         imageForGemini = cleanedImageBase64;
         isBackgroundRemoved = true;
       } catch (clipdropError: any) {
-        console.error("Clipdrop failed:", clipdropError);
+        console.error("Clipdrop failed (or key missing):", clipdropError.message);
         
         // Optional: Fallback to @imgly/background-removal-node if Clipdrop fails?
         // User requested Clipdrop as default. We can try fallback if we want robustness.
