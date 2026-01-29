@@ -30,49 +30,170 @@ const EVENT_LABELS: Record<string, string> = {
 };
 
 export default function StylingScreen() {
-  const { event } = useLocalSearchParams<{ event: string }>();
+  const { event, selectedItemId } = useLocalSearchParams<{ event: string; selectedItemId?: string }>();
   const { items } = useWardrobe();
   const [suggestedOutfit, setSuggestedOutfit] = useState<ClothingItem[]>([]);
+  
+  const selectedItem = selectedItemId ? items.find(item => item.id === selectedItemId) : null;
 
   const generateOutfitMutation = useMutation({
     mutationFn: async () => {
-      // Simulate AI processing
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       if (items.length === 0) {
         throw new Error("No items in wardrobe");
       }
 
-      const tops = items.filter((item) => item.category === "top");
-      const bottoms = items.filter((item) => item.category === "bottom");
-      const dresses = items.filter((item) => item.category === "dress");
-
       const outfit: ClothingItem[] = [];
-
-      if (dresses.length > 0 && Math.random() > 0.5) {
-        outfit.push(dresses[Math.floor(Math.random() * dresses.length)]);
+      
+      // If a specific item is selected, start with it and build around it
+      if (selectedItem) {
+        outfit.push(selectedItem);
+        
+        const otherItems = items.filter(item => item.id !== selectedItem.id);
+        const selectedCategory = selectedItem.category;
+        
+        // Build complementary outfit based on selected item category
+        if (selectedCategory === "top" || selectedCategory === "shirt" || selectedCategory === "t-shirt" || selectedCategory === "blouse") {
+          // Selected a top, need bottom and shoes
+          const bottoms = otherItems.filter(item => 
+            item.category === "bottom" || item.category === "pants" || 
+            item.category === "jeans" || item.category === "shorts" || 
+            item.category === "skirt"
+          );
+          if (bottoms.length > 0) {
+            outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
+          }
+        } else if (selectedCategory === "bottom" || selectedCategory === "pants" || selectedCategory === "jeans" || selectedCategory === "shorts" || selectedCategory === "skirt") {
+          // Selected a bottom, need top
+          const tops = otherItems.filter(item => 
+            item.category === "top" || item.category === "shirt" || 
+            item.category === "t-shirt" || item.category === "blouse"
+          );
+          if (tops.length > 0) {
+            outfit.push(tops[Math.floor(Math.random() * tops.length)]);
+          }
+        } else if (selectedCategory === "dress" || selectedCategory === "gown") {
+          // Dress is complete, just add accessories
+        } else if (selectedCategory === "shoes" || selectedCategory === "heels" || selectedCategory === "sneakers") {
+          // Selected shoes, build full outfit
+          const tops = otherItems.filter(item => 
+            item.category === "top" || item.category === "shirt" || 
+            item.category === "t-shirt" || item.category === "blouse"
+          );
+          const bottoms = otherItems.filter(item => 
+            item.category === "bottom" || item.category === "pants" || 
+            item.category === "jeans" || item.category === "shorts" || 
+            item.category === "skirt"
+          );
+          const dresses = otherItems.filter(item => item.category === "dress" || item.category === "gown");
+          
+          if (dresses.length > 0 && Math.random() > 0.5) {
+            outfit.push(dresses[Math.floor(Math.random() * dresses.length)]);
+          } else {
+            if (tops.length > 0) {
+              outfit.push(tops[Math.floor(Math.random() * tops.length)]);
+            }
+            if (bottoms.length > 0) {
+              outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
+            }
+          }
+        } else if (selectedCategory === "outerwear" || selectedCategory === "jacket" || selectedCategory === "coat") {
+          // Selected outerwear, need full outfit underneath
+          const tops = otherItems.filter(item => 
+            item.category === "top" || item.category === "shirt" || 
+            item.category === "t-shirt" || item.category === "blouse"
+          );
+          const bottoms = otherItems.filter(item => 
+            item.category === "bottom" || item.category === "pants" || 
+            item.category === "jeans" || item.category === "shorts"
+          );
+          if (tops.length > 0) {
+            outfit.push(tops[Math.floor(Math.random() * tops.length)]);
+          }
+          if (bottoms.length > 0) {
+            outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
+          }
+        } else {
+          // For accessories or other categories, build a complete outfit
+          const tops = otherItems.filter(item => 
+            item.category === "top" || item.category === "shirt" || 
+            item.category === "t-shirt" || item.category === "blouse"
+          );
+          const bottoms = otherItems.filter(item => 
+            item.category === "bottom" || item.category === "pants" || 
+            item.category === "jeans" || item.category === "shorts" || 
+            item.category === "skirt"
+          );
+          if (tops.length > 0) {
+            outfit.push(tops[Math.floor(Math.random() * tops.length)]);
+          }
+          if (bottoms.length > 0) {
+            outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
+          }
+        }
+        
+        // Add shoes if not already selected and available
+        if (selectedCategory !== "shoes" && selectedCategory !== "heels" && selectedCategory !== "sneakers") {
+          const shoes = otherItems.filter(item => 
+            item.category === "shoes" || item.category === "heels" || item.category === "sneakers"
+          );
+          if (shoes.length > 0) {
+            outfit.push(shoes[Math.floor(Math.random() * shoes.length)]);
+          }
+        }
+        
+        // Optionally add accessories if not already selected
+        if (selectedCategory !== "accessories" && selectedCategory !== "bag" && selectedCategory !== "jewelry") {
+          const accessories = otherItems.filter(item => 
+            item.category === "accessories" || item.category === "bag" || item.category === "jewelry"
+          );
+          if (accessories.length > 0 && Math.random() > 0.5) {
+            outfit.push(accessories[Math.floor(Math.random() * accessories.length)]);
+          }
+        }
+        
+        // Optionally add outerwear if not already selected
+        if (selectedCategory !== "outerwear" && selectedCategory !== "jacket" && selectedCategory !== "coat") {
+          const outerwear = otherItems.filter(item => 
+            item.category === "outerwear" || item.category === "jacket" || item.category === "coat"
+          );
+          if (outerwear.length > 0 && Math.random() > 0.7) {
+            outfit.push(outerwear[Math.floor(Math.random() * outerwear.length)]);
+          }
+        }
+        
       } else {
-        if (tops.length > 0) {
-          outfit.push(tops[Math.floor(Math.random() * tops.length)]);
+        // Original logic when no specific item is selected
+        const tops = items.filter((item) => item.category === "top");
+        const bottoms = items.filter((item) => item.category === "bottom");
+        const dresses = items.filter((item) => item.category === "dress");
+
+        if (dresses.length > 0 && Math.random() > 0.5) {
+          outfit.push(dresses[Math.floor(Math.random() * dresses.length)]);
+        } else {
+          if (tops.length > 0) {
+            outfit.push(tops[Math.floor(Math.random() * tops.length)]);
+          }
+          if (bottoms.length > 0) {
+            outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
+          }
         }
-        if (bottoms.length > 0) {
-          outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
+
+        const outerwear = items.filter((item) => item.category === "outerwear");
+        if (outerwear.length > 0 && Math.random() > 0.6) {
+          outfit.push(outerwear[Math.floor(Math.random() * outerwear.length)]);
         }
-      }
 
-      const outerwear = items.filter((item) => item.category === "outerwear");
-      if (outerwear.length > 0 && Math.random() > 0.6) {
-        outfit.push(outerwear[Math.floor(Math.random() * outerwear.length)]);
-      }
+        const shoes = items.filter((item) => item.category === "shoes");
+        if (shoes.length > 0) {
+          outfit.push(shoes[Math.floor(Math.random() * shoes.length)]);
+        }
 
-      const shoes = items.filter((item) => item.category === "shoes");
-      if (shoes.length > 0) {
-        outfit.push(shoes[Math.floor(Math.random() * shoes.length)]);
-      }
-
-      const accessories = items.filter((item) => item.category === "accessories");
-      if (accessories.length > 0 && Math.random() > 0.5) {
-        outfit.push(accessories[Math.floor(Math.random() * accessories.length)]);
+        const accessories = items.filter((item) => item.category === "accessories");
+        if (accessories.length > 0 && Math.random() > 0.5) {
+          outfit.push(accessories[Math.floor(Math.random() * accessories.length)]);
+        }
       }
 
       return outfit;
@@ -120,7 +241,10 @@ export default function StylingScreen() {
                 </View>
                 <Text style={styles.placeholderTitle}>AI STYLING</Text>
                 <Text style={styles.placeholderText}>
-                  Our AI will analyze your wardrobe to create the perfect look for your event.
+                  {selectedItem 
+                    ? `We'll find the perfect pieces to match your ${selectedItem.category}.`
+                    : "Our AI will analyze your wardrobe to create the perfect look for your event."
+                  }
                 </Text>
               </View>
 
@@ -136,7 +260,9 @@ export default function StylingScreen() {
                   {generateOutfitMutation.isPending ? (
                     <ActivityIndicator color={Colors.richBlack} />
                   ) : (
-                    <Text style={styles.generateButtonText}>GENERATE OUTFIT</Text>
+                    <Text style={styles.generateButtonText}>
+                      {selectedItem ? "MATCH THIS PIECE" : "GENERATE OUTFIT"}
+                    </Text>
                   )}
                 </LinearGradient>
               </TouchableOpacity>
@@ -144,7 +270,9 @@ export default function StylingScreen() {
           ) : (
             <View style={styles.outfitContainer}>
               <View style={styles.outfitHeader}>
-                <Text style={styles.outfitTitle}>SUGGESTED LOOK</Text>
+                <Text style={styles.outfitTitle}>
+                  {selectedItem ? "STYLED AROUND YOUR PICK" : "SUGGESTED LOOK"}
+                </Text>
                 <View style={styles.outfitActions}>
                   <TouchableOpacity 
                     onPress={handleGenerateOutfit}

@@ -111,20 +111,25 @@ export default function ProfileSetupScreen() {
       setIsLoadingLocation(true);
 
       if (Platform.OS === "web") {
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            async (position) => {
-              const { latitude, longitude } = position.coords;
-              setCoordinates({ latitude, longitude });
-              setCity("Your City");
-              setCountry("Your Country");
-              setIsLoadingLocation(false);
-            },
-            () => {
-              setIsLoadingLocation(false);
-              Alert.alert("Error", "Failed to get location");
-            }
-          );
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== 'granted') {
+             Alert.alert("Permission Required", "Location access is needed");
+             setIsLoadingLocation(false);
+             return;
+          }
+
+          const location = await Location.getCurrentPositionAsync({});
+          const { latitude, longitude } = location.coords;
+          setCoordinates({ latitude, longitude });
+          
+          // Reverse geocoding is often not supported or limited on web
+          // We'll leave city/country empty for manual entry to avoid bad data
+          setIsLoadingLocation(false);
+        } catch (error) {
+           console.error("Web location error:", error);
+           setIsLoadingLocation(false);
+           Alert.alert("Error", "Failed to get location");
         }
         return;
       }
@@ -136,7 +141,9 @@ export default function ProfileSetupScreen() {
         return;
       }
 
-      const location = await Location.getCurrentPositionAsync({});
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
       const { latitude, longitude } = location.coords;
       setCoordinates({ latitude, longitude });
 
@@ -146,8 +153,17 @@ export default function ProfileSetupScreen() {
       });
 
       if (address) {
-        setCity(address.city || address.subregion || "");
-        setCountry(address.country || "");
+        console.log("[ProfileSetup] Location found:", address);
+        // Try multiple fields for city to ensure we get a value
+        const cityValue = address.city || address.subregion || address.district || address.region || address.name || "";
+        const countryValue = address.country || address.isoCountryCode || "";
+        
+        if (!cityValue && !city && !country) {
+           Alert.alert("Notice", "We couldn't automatically detect your city name, please enter it manually.");
+        }
+
+        if (cityValue) setCity(cityValue);
+        if (countryValue) setCountry(countryValue);
       }
     } catch (error) {
       console.error("[ProfileSetup] Location error:", error);

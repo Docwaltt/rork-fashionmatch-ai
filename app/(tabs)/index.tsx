@@ -1,8 +1,8 @@
 import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Sparkles, Grid } from "lucide-react-native";
-import { useState } from "react";
+import { Sparkles, Grid, Trash2, Edit3, X, Search } from "lucide-react-native";
+import { useState, useMemo } from "react";
 import {
   StyleSheet,
   Text,
@@ -13,14 +13,18 @@ import {
   Modal,
   Pressable,
   Platform,
-  StatusBar
+  StatusBar,
+  Alert,
+  TextInput
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 
 import Colors from "@/constants/colors";
 import { useWardrobe } from "@/contexts/WardrobeContext";
-import { ClothingItem } from "@/types/wardrobe";
+import { useAuth } from "@/contexts/AuthContext";
+import { ClothingItem, ClothingCategory } from "@/types/wardrobe";
+import { getCategoriesForGender } from "@/types/user";
 
 const { width } = Dimensions.get("window");
 const COLUMN_COUNT = 2;
@@ -36,10 +40,53 @@ const EVENT_TYPES = [
 ];
 
 export default function WardrobeScreen() {
-  const { items, isLoading } = useWardrobe();
+  const { items, isLoading, removeItem, updateItem } = useWardrobe();
+  const { userProfile } = useAuth();
   const [selectedItem, setSelectedItem] = useState<ClothingItem | null>(null);
   const [showStyleModal, setShowStyleModal] = useState<boolean>(false);
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
+  const [editCategory, setEditCategory] = useState<ClothingCategory | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [styleWithItem, setStyleWithItem] = useState<ClothingItem | null>(null);
+  const [activeCategory, setActiveCategory] = useState<ClothingCategory | 'all'>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const categories = useMemo(() => {
+    if (userProfile?.gender) {
+      return getCategoriesForGender(userProfile.gender);
+    }
+    return [
+      { id: 'top' as ClothingCategory, label: 'Top', icon: '👕' },
+      { id: 'bottom' as ClothingCategory, label: 'Bottom', icon: '👖' },
+      { id: 'dress' as ClothingCategory, label: 'Dress', icon: '👗' },
+      { id: 'shoes' as ClothingCategory, label: 'Shoes', icon: '👟' },
+      { id: 'outerwear' as ClothingCategory, label: 'Outer', icon: '🧥' },
+      { id: 'accessories' as ClothingCategory, label: 'Accs', icon: '👜' },
+    ];
+  }, [userProfile?.gender]);
+
+  const filteredItems = useMemo(() => {
+    let result = items;
+    
+    if (activeCategory !== 'all') {
+      result = result.filter(item => item.category === activeCategory);
+    }
+    
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      result = result.filter(item => {
+        const matchesColor = item.colors?.some(color => 
+          color.toLowerCase().includes(query)
+        );
+        const matchesCategory = item.category.toLowerCase().includes(query);
+        const matchesSeason = item.season?.toLowerCase().includes(query);
+        const matchesName = item.name?.toLowerCase().includes(query);
+        return matchesColor || matchesCategory || matchesSeason || matchesName;
+      });
+    }
+    
+    return result;
+  }, [items, activeCategory, searchQuery]);
 
   const handleStartStyling = () => {
     setShowStyleModal(true);
@@ -47,7 +94,57 @@ export default function WardrobeScreen() {
 
   const handleEventSelect = (eventId: string) => {
     setShowStyleModal(false);
-    router.push(`/styling?event=${eventId}` as any);
+    if (styleWithItem) {
+      router.push(`/styling?event=${eventId}&selectedItemId=${styleWithItem.id}` as any);
+      setStyleWithItem(null);
+    } else {
+      router.push(`/styling?event=${eventId}` as any);
+    }
+  };
+
+  const handleStyleWithItem = () => {
+    if (selectedItem) {
+      setStyleWithItem(selectedItem);
+      setSelectedItem(null);
+      setShowStyleModal(true);
+    }
+  };
+
+  const handleDeleteItem = () => {
+    if (!selectedItem) return;
+    Alert.alert(
+      "Delete Item",
+      "Are you sure you want to remove this item from your wardrobe?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            removeItem(selectedItem.id);
+            setSelectedItem(null);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleEditItem = () => {
+    if (!selectedItem) return;
+    setEditCategory(selectedItem.category);
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!selectedItem || !editCategory) return;
+    updateItem({ id: selectedItem.id, category: editCategory });
+    setSelectedItem({ ...selectedItem, category: editCategory });
+    setShowEditModal(false);
+  };
+
+  const getCategoryLabel = (categoryId: string) => {
+    const found = categories.find(c => c.id === categoryId);
+    return found?.label || categoryId;
   };
 
   if (isLoading) {
@@ -111,25 +208,72 @@ export default function WardrobeScreen() {
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
+            <View style={styles.searchContainer}>
+              <View style={styles.searchInputWrapper}>
+                <Search size={18} color={Colors.gray[500]} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search by color, pattern, season..."
+                  placeholderTextColor={Colors.gray[500]}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')}>
+                    <X size={16} color={Colors.gray[500]} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              style={styles.categoryFilterContainer}
+              contentContainerStyle={styles.categoryFilterContent}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.categoryChip,
+                  activeCategory === 'all' && styles.categoryChipActive
+                ]}
+                onPress={() => setActiveCategory('all')}
+              >
+                <Text style={[
+                  styles.categoryChipText,
+                  activeCategory === 'all' && styles.categoryChipTextActive
+                ]}>All</Text>
+              </TouchableOpacity>
+              {categories.map((cat) => (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={[
+                    styles.categoryChip,
+                    activeCategory === cat.id && styles.categoryChipActive
+                  ]}
+                  onPress={() => setActiveCategory(cat.id as ClothingCategory)}
+                >
+                  <Text style={styles.categoryChipIcon}>{cat.icon}</Text>
+                  <Text style={[
+                    styles.categoryChipText,
+                    activeCategory === cat.id && styles.categoryChipTextActive
+                  ]}>{cat.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
             <View style={styles.statsContainer}>
               <View style={styles.statsWrapper}>
                 <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{filteredItems.length}</Text>
+                  <Text style={styles.statLabel}>{activeCategory === 'all' ? 'SHOWING' : 'FILTERED'}</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
                   <Text style={styles.statNumber}>{items.length}</Text>
                   <Text style={styles.statLabel}>TOTAL</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={styles.statNumber}>
-                    {items.filter((item) => item.category === "top").length}
-                  </Text>
-                  <Text style={styles.statLabel}>TOPS</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={styles.statNumber}>
-                    {items.filter((item) => item.category === "bottom").length}
-                  </Text>
-                  <Text style={styles.statLabel}>BOTTOMS</Text>
                 </View>
               </View>
             </View>
@@ -144,7 +288,22 @@ export default function WardrobeScreen() {
             </View>
 
             <View style={styles.grid}>
-              {items.map((item) => (
+              {filteredItems.length === 0 ? (
+                <View style={styles.noResultsContainer}>
+                  <Text style={styles.noResultsText}>
+                    {searchQuery ? `No items matching "${searchQuery}"` : `No ${activeCategory} items yet`}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.clearFilterButton}
+                    onPress={() => {
+                      setSearchQuery('');
+                      setActiveCategory('all');
+                    }}
+                  >
+                    <Text style={styles.clearFilterButtonText}>CLEAR FILTERS</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : filteredItems.map((item) => (
                 <TouchableOpacity
                   key={item.id}
                   style={styles.gridItem}
@@ -170,7 +329,7 @@ export default function WardrobeScreen() {
         )}
 
         <Modal
-          visible={selectedItem !== null}
+          visible={selectedItem !== null && !showEditModal}
           transparent
           animationType="fade"
           onRequestClose={() => setSelectedItem(null)}
@@ -180,6 +339,12 @@ export default function WardrobeScreen() {
             <View style={styles.modalContent}>
               {selectedItem && (
                 <>
+                  <TouchableOpacity 
+                    style={styles.modalCloseButton} 
+                    onPress={() => setSelectedItem(null)}
+                  >
+                    <X size={20} color={Colors.gray[400]} />
+                  </TouchableOpacity>
                   <Image
                     source={{ uri: selectedItem.imageUri }}
                     style={styles.modalImage}
@@ -187,16 +352,109 @@ export default function WardrobeScreen() {
                   />
                   <View style={styles.modalInfo}>
                     <Text style={styles.modalCategory}>
-                      {selectedItem.category}
+                      {getCategoryLabel(selectedItem.category)}
                     </Text>
+                    
+                    {selectedItem.colors && selectedItem.colors.length > 0 && (
+                      <View style={styles.colorsSection}>
+                        <Text style={styles.detailLabel}>COLORS</Text>
+                        <View style={styles.colorTags}>
+                          {selectedItem.colors.map((color, index) => (
+                            <View key={index} style={styles.colorTag}>
+                              <Text style={styles.colorTagText}>{color.toUpperCase()}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                    
+                    {selectedItem.season && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>SEASON</Text>
+                        <Text style={styles.detailValue}>{selectedItem.season}</Text>
+                      </View>
+                    )}
+                    
                     <Text style={styles.modalDate}>
                       Added {new Date(selectedItem.addedAt).toLocaleDateString()}
                     </Text>
+                    
+                    <TouchableOpacity 
+                      style={styles.styleWithItemButton} 
+                      onPress={handleStyleWithItem}
+                    >
+                      <Sparkles size={18} color={Colors.richBlack} />
+                      <Text style={styles.styleWithItemButtonText}>STYLE ME WITH THIS</Text>
+                    </TouchableOpacity>
+                    
+                    <View style={styles.modalActions}>
+                      <TouchableOpacity 
+                        style={styles.editButton} 
+                        onPress={handleEditItem}
+                      >
+                        <Edit3 size={18} color={Colors.gold[400]} />
+                        <Text style={styles.editButtonText}>EDIT</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.deleteButton} 
+                        onPress={handleDeleteItem}
+                      >
+                        <Trash2 size={18} color="#E53935" />
+                        <Text style={styles.deleteButtonText}>DELETE</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </>
               )}
             </View>
           </BlurView>
+        </Modal>
+
+        <Modal
+          visible={showEditModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowEditModal(false)}
+        >
+          <View style={styles.styleModalOverlay}>
+            <Pressable
+              style={styles.styleModalBackdrop}
+              onPress={() => setShowEditModal(false)}
+            />
+            <View style={styles.styleModalContent}>
+              <View style={styles.styleModalHandle} />
+              <Text style={styles.styleModalTitle}>EDIT CATEGORY</Text>
+              <Text style={styles.styleModalSubtitle}>
+                Select the correct category for this item
+              </Text>
+              <ScrollView style={styles.eventList} showsVerticalScrollIndicator={false}>
+                <View style={styles.editCategoryGrid}>
+                  {categories.map((cat) => (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={[
+                        styles.editCategoryChip,
+                        editCategory === cat.id && styles.editCategoryChipSelected
+                      ]}
+                      onPress={() => setEditCategory(cat.id as ClothingCategory)}
+                    >
+                      <Text style={styles.editCategoryIcon}>{cat.icon}</Text>
+                      <Text style={[
+                        styles.editCategoryText,
+                        editCategory === cat.id && styles.editCategoryTextSelected
+                      ]}>{cat.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+              <TouchableOpacity 
+                style={styles.saveEditButton} 
+                onPress={handleSaveEdit}
+              >
+                <Text style={styles.saveEditButtonText}>SAVE CHANGES</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </Modal>
 
         <Modal
@@ -214,7 +472,7 @@ export default function WardrobeScreen() {
               <View style={styles.styleModalHandle} />
               <Text style={styles.styleModalTitle}>SELECT OCCASION</Text>
               <Text style={styles.styleModalSubtitle}>
-                Where are you going today?
+                {styleWithItem ? `Style your ${styleWithItem.category} for...` : "Where are you going today?"}
               </Text>
               <ScrollView style={styles.eventList}>
                 {EVENT_TYPES.map((event) => (
@@ -301,7 +559,88 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100, // Space for tab bar
+    paddingBottom: 100,
+  },
+  searchContainer: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.gray[50],
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: Colors.gray[100],
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.white,
+    letterSpacing: 0.3,
+  },
+  categoryFilterContainer: {
+    marginTop: 16,
+    maxHeight: 50,
+  },
+  categoryFilterContent: {
+    paddingHorizontal: 24,
+    gap: 10,
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.gray[200],
+    backgroundColor: 'transparent',
+  },
+  categoryChipActive: {
+    borderColor: Colors.gold[400],
+    backgroundColor: 'rgba(212, 175, 55, 0.1)',
+  },
+  categoryChipIcon: {
+    fontSize: 14,
+  },
+  categoryChipText: {
+    fontSize: 12,
+    color: Colors.gray[500],
+    fontWeight: '600' as const,
+    letterSpacing: 0.5,
+  },
+  categoryChipTextActive: {
+    color: Colors.gold[400],
+  },
+  noResultsContainer: {
+    width: '100%',
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 24,
+  },
+  noResultsText: {
+    fontSize: 14,
+    color: Colors.gray[500],
+    textAlign: 'center' as const,
+    marginBottom: 20,
+    letterSpacing: 0.5,
+  },
+  clearFilterButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: Colors.gold[400],
+  },
+  clearFilterButtonText: {
+    fontSize: 12,
+    color: Colors.gold[400],
+    fontWeight: '700' as const,
+    letterSpacing: 1,
   },
   statsContainer: {
     paddingHorizontal: 24,
@@ -457,6 +796,15 @@ const styles = StyleSheet.create({
     height: 450,
     backgroundColor: Colors.gray[50],
   },
+  modalCloseButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 10,
+    padding: 8,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+  },
   modalInfo: {
     padding: 24,
     backgroundColor: Colors.card,
@@ -464,17 +812,152 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.gray[100],
   },
   modalCategory: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: "600",
     color: Colors.white,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    marginBottom: 4,
+    marginBottom: 16,
+  },
+  colorsSection: {
+    marginBottom: 16,
+  },
+  detailLabel: {
+    fontSize: 10,
+    color: Colors.gray[500],
+    letterSpacing: 1.5,
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  colorTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  colorTag: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(212, 175, 55, 0.1)',
+    borderWidth: 1,
+    borderColor: Colors.gold[400],
+  },
+  colorTagText: {
+    fontSize: 10,
+    color: Colors.gold[400],
+    fontWeight: '600',
+    letterSpacing: 1,
+  },
+  detailRow: {
+    marginBottom: 16,
+  },
+  detailValue: {
+    fontSize: 14,
+    color: Colors.white,
+    textTransform: 'capitalize',
   },
   modalDate: {
     fontSize: 10,
     color: Colors.gray[500],
     letterSpacing: 0.5,
+    marginBottom: 20,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: Colors.gray[100],
+  },
+  editButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: Colors.gold[400],
+  },
+  editButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.gold[400],
+    letterSpacing: 1,
+  },
+  deleteButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#E53935',
+  },
+  deleteButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#E53935',
+    letterSpacing: 1,
+  },
+  styleWithItemButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    backgroundColor: Colors.gold[400],
+    marginBottom: 12,
+  },
+  styleWithItemButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.richBlack,
+    letterSpacing: 1,
+  },
+  editCategoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingBottom: 20,
+  },
+  editCategoryChip: {
+    width: '30%',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: Colors.gray[200],
+    alignItems: 'center',
+  },
+  editCategoryChipSelected: {
+    borderColor: Colors.gold[400],
+    backgroundColor: 'rgba(212, 175, 55, 0.1)',
+  },
+  editCategoryIcon: {
+    fontSize: 20,
+    marginBottom: 6,
+  },
+  editCategoryText: {
+    fontSize: 10,
+    color: Colors.gray[500],
+    letterSpacing: 0.5,
+    fontWeight: '500',
+  },
+  editCategoryTextSelected: {
+    color: Colors.gold[400],
+    fontWeight: '600',
+  },
+  saveEditButton: {
+    backgroundColor: Colors.gold[400],
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  saveEditButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.richBlack,
+    letterSpacing: 1.5,
   },
   styleModalOverlay: {
     flex: 1,

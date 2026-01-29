@@ -1,42 +1,84 @@
-import { functions } from "@/lib/firebase";
-import { httpsCallable } from "firebase/functions";
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Camera, ImageIcon, X, RefreshCcw } from "lucide-react-native";
-import { useState, useRef } from "react";
+import { Camera, ImageIcon, X, RefreshCcw, AlertCircle, CheckCircle, RotateCcw } from "lucide-react-native";
+import { useState, useRef, useMemo } from "react";
 import {
   StyleSheet,
   Text,
   View,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
   StatusBar,
   Platform,
-  Alert
+  Alert,
+  ActivityIndicator
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useMutation } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
-
+import { trpc } from "@/lib/trpc";
 import Colors from "@/constants/colors";
 import { useWardrobe } from "@/contexts/WardrobeContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { ClothingCategory } from "@/types/wardrobe";
+import { getCategoriesForGender } from "@/types/user";
 
-const CATEGORIES: { id: ClothingCategory; label: string; icon: string }[] = [
-  { id: "top", label: "Top", icon: "TOP" },
-  { id: "bottom", label: "Bottom", icon: "BTM" },
-  { id: "dress", label: "Dress", icon: "DRS" },
-  { id: "outerwear", label: "Outer", icon: "OUT" },
-  { id: "shoes", label: "Shoes", icon: "SHS" },
-  { id: "accessories", label: "Accs", icon: "ACS" },
-];
+const compressAndConvertToBase64 = async (uri: string): Promise<string> => {
+  console.log("[AddItem] Compressing image...");
+  
+  try {
+    // Compress and resize the image to reduce payload size
+    const manipulated = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 800 } }], // Resize to max 800px width
+      { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+    );
+    
+    if (manipulated.base64) {
+      const sizeKB = (manipulated.base64.length * 0.75) / 1024;
+      console.log(`[AddItem] Compressed image size: ${sizeKB.toFixed(0)}KB`);
+      return manipulated.base64;
+    }
+  } catch (compressError) {
+    console.warn("[AddItem] Compression failed, trying direct conversion:", compressError);
+  }
+  
+  // Fallback: direct conversion for web or if manipulation fails
+  if (Platform.OS === 'web') {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string;
+        const base64 = dataUrl.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } else {
+    // For native, use canvas-based compression as fallback
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string;
+        const base64 = dataUrl.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+};
 
 export default function AddItemScreen() {
   const cameraRef = useRef<CameraView>(null);
+  const { userProfile } = useAuth();
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>("back");
   const [showCamera, setShowCamera] = useState<boolean>(false);
@@ -44,100 +86,181 @@ export default function AddItemScreen() {
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<ClothingCategory | null>(null);
   const [detectedColors, setDetectedColors] = useState<string[]>([]);
+   const [detectedTexture, setDetectedTexture] = useState<string | null>(null);
+   const [detectedDesign, setDetectedDesign] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisSuccess, setAnalysisSuccess] = useState<boolean>(false);
+  const { addItem } = useWardrobe();
   const [materialType, setMaterialType] = useState<string | null>(null);
   const [hasPattern, setHasPattern] = useState<boolean | null>(null);
   const [patternDescription, setPatternDescription] = useState<string | null>(null);
 
-  const { addItem } = useWardrobe();
-
-  const processImageMutation = useMutation({
-    mutationFn: async (imageBase64: string) => {
-      try {
-        const processClothing = httpsCallable(functions, 'analyzeImage');
-        const { data } = await processClothing({ imgData: imageBase64 });
-        
-        const result = data as any;
-        if (result.error) {
-          throw new Error(result.error);
-        }
-        
-        return result as { 
-          category?: string; 
-          color?: string; 
-          style?: string; 
-          confidence?: number;
-          cleanedImage?: string;
-          isBackgroundRemoved?: boolean;
-          materialType?: string;
-          hasPattern?: boolean;
-          patternDescription?: string;
-        };
-      } catch (e: any) {
-        console.error("Processing failed details:", e);
-        throw new Error(e.message || "Failed to process image");
-      }
-    },
+  const analyzeImageMutation = trpc.wardrobe.analyzeImage.useMutation({
     onSuccess: (data) => {
+      console.log("[AddItem] Processing successful. Response data:", {
+        category: data.category,
+        color: data.color,
+        hasCleanedImage: !!data.cleanedImage
+      });
+      setAnalysisError(null);
+      setAnalysisSuccess(true);
+      
       if (data.cleanedImage) {
         setProcessedImage(data.cleanedImage);
       } else {
-        setProcessedImage(capturedImage);
-        if (data.isBackgroundRemoved === false) {
-        }
+        console.log("[AddItem] No cleaned image returned from AI");
       }
-      
-      if (data.category) {
-        const catLower = data.category.toLowerCase();
-        const matchedCat = CATEGORIES.find(c => 
-          catLower.includes(c.id) || catLower.includes(c.label.toLowerCase())
-        );
-        if (matchedCat) {
-          setSelectedCategory(matchedCat.id);
-        }
-      }
-
       if (data.color) {
         setDetectedColors([data.color]);
+      }
+      if (data.fabric) {
+        setDetectedTexture(data.fabric);
+      }
+      if (data.hasPattern) {
+        setDetectedDesign(data.patternDescription || 'Patterned');
+      }
+      if (data.category) {
+        const validCategories = categories.map(c => c.id);
+        const returnedCategory = data.category as ClothingCategory;
+
+        if (validCategories.includes(returnedCategory)) {
+          console.log("[AddItem] Setting category:", returnedCategory);
+          setSelectedCategory(returnedCategory);
+        } else {
+           console.log("[AddItem] Category from API not in valid list:", returnedCategory);
+           // Try one last mapping check on the client side
+           const lowercaseCat = returnedCategory.toLowerCase();
+           const match = validCategories.find(id =>
+             lowercaseCat.includes(id.toLowerCase()) ||
+             id.toLowerCase().includes(lowercaseCat)
+           );
+           if (match) {
+             console.log("[AddItem] Client-side category match found:", match);
+             setSelectedCategory(match as ClothingCategory);
+           } else {
+             // Second pass: word by word matching
+             const words = lowercaseCat.split(/\s+/);
+             const wordMatch = validCategories.find(id => {
+               const idLower = id.toLowerCase();
+               return words.some(word => word.length > 3 && (idLower.includes(word) || word.includes(idLower)));
+             });
+             if (wordMatch) {
+               console.log("[AddItem] Client-side word-based match found:", wordMatch);
+               setSelectedCategory(wordMatch as ClothingCategory);
+             }
+           }
+        }
       }
 
       if (data.materialType) {
         setMaterialType(data.materialType);
       }
-
       if (data.hasPattern) {
         setHasPattern(data.hasPattern);
       }
-
       if (data.patternDescription) {
         setPatternDescription(data.patternDescription);
       }
+      setIsProcessing(false);
     },
-    onError: (error) => {
-       console.log("Error processing image", error);
-       Alert.alert("Analysis Failed", error.message || "Could not analyze the image.");
-    }
+    onError: (error: any) => {
+      console.error("[AddItem] Processing error:", error.message);
+      console.error("[AddItem] Full error:", error);
+      setIsProcessing(false);
+      
+      // Provide user-friendly error messages
+      let errorMessage = "AI analysis unavailable. Please select category manually.";
+      
+      if (error.message?.includes("Failed to fetch") || error.message?.includes("fetch")) {
+        errorMessage = "Cannot connect to server. Please select category manually.";
+        console.error("[AddItem] Network error - backend may be unreachable");
+      } else if (error.message?.includes("timeout")) {
+        errorMessage = "Request timed out. Please select category manually.";
+      } else if (error.message?.includes("CORS")) {
+        errorMessage = "Server configuration issue. Please select category manually.";
+      }
+      
+      setAnalysisError(errorMessage);
+      setAnalysisSuccess(false);
+    },
   });
+
+  const handleProcessImage = async (imageUri: string) => {
+    setIsProcessing(true);
+    setCapturedImage(imageUri);
+    setProcessedImage(imageUri); // Use original image as fallback
+    
+    // Safety timeout to allow manual selection if AI is too slow
+    const timeoutId = setTimeout(() => {
+      if (isProcessing) {
+        setIsProcessing(false);
+        console.log("[AddItem] Analysis timeout, allowing manual selection");
+      }
+    }, 60000);
+
+    try {
+      console.log("[AddItem] Preparing image for tRPC...");
+      let base64Image: string;
+
+      if (imageUri.startsWith("data:")) {
+        base64Image = imageUri;
+      } else {
+        const base64 = await compressAndConvertToBase64(imageUri);
+        base64Image = `data:image/jpeg;base64,${base64}`;
+      }
+
+      const apiUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+      console.log("[AddItem] API Base URL:", apiUrl || "(not set, using relative path)");
+      console.log("[AddItem] Calling tRPC wardrobe.analyzeImage...");
+      
+      analyzeImageMutation.mutate({
+        image: base64Image,
+        gender: userProfile?.gender || undefined,
+      });
+
+    } catch (error: any) {
+      console.error("[AddItem] Error preparing image:", error);
+      setAnalysisError("Failed to prepare image. Please select category manually.");
+      setIsProcessing(false);
+      clearTimeout(timeoutId);
+    }
+  };
+
+  const categories = useMemo(() => {
+    if (userProfile?.gender) {
+      return getCategoriesForGender(userProfile.gender);
+    }
+    // Fallback if profile is missing or loading
+    // Return a default list of common categories to ensure the UI is not empty
+    const fallbackCategories: { id: ClothingCategory; label: string; icon: string }[] = [
+      { id: 'top', label: 'Top', icon: '👕' },
+      { id: 'bottom', label: 'Bottom', icon: '👖' },
+      { id: 'dress', label: 'Dress', icon: '👗' },
+      { id: 'shoes', label: 'Shoes', icon: '👟' },
+      { id: 'outerwear', label: 'Outer', icon: '🧥' },
+      { id: 'accessories', label: 'Accs', icon: '👜' },
+    ];
+    return fallbackCategories;
+  }, [userProfile?.gender]);
 
   const handleTakePhoto = async () => {
     if (!cameraRef.current) return;
 
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.5, 
-        base64: true,
+        quality: 0.8,
+        skipProcessing: true,
       });
       
       if (photo && photo.uri) {
-        setCapturedImage(photo.uri);
+        console.log("[AddItem] Photo captured:", photo.uri);
         setShowCamera(false);
-        
-        if (photo.base64) {
-          processImageMutation.mutate(`data:image/jpeg;base64,${photo.base64}`);
-        }
+        handleProcessImage(photo.uri);
       }
     } catch (error) {
       console.error("Error taking photo:", error);
-      Alert.alert("Error", "Failed to capture photo.");
+      Alert.alert("Camera Error", "Failed to take photo");
     }
   };
 
@@ -146,22 +269,17 @@ export default function AddItemScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: "images" as const,
         allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.5,
-        base64: true,
+        quality: 0.8,
       });
 
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
-        setCapturedImage(asset.uri);
-        
-        if (asset.base64) {
-          processImageMutation.mutate(`data:image/jpeg;base64,${asset.base64}`);
-        }
+        console.log("[AddItem] Image picked:", asset.uri);
+        handleProcessImage(asset.uri);
       }
     } catch (error) {
-       console.error("Error picking image:", error);
-       Alert.alert("Error", "Failed to select image.");
+      console.error("Error picking image:", error);
+      Alert.alert("Gallery Error", "Failed to pick image");
     }
   };
 
@@ -177,20 +295,49 @@ export default function AddItemScreen() {
       materialType: materialType,
       hasPattern: hasPattern,
       patternDescription: patternDescription,
+      color: detectedColors[0] || 'unknown',
+      style: 'casual', // default, user can edit later
+      confidence: 1.0, // manually added
     };
 
     addItem(newItem);
     
-    setCapturedImage(null);
-    setProcessedImage(null);
-    setSelectedCategory(null);
-    setDetectedColors([]);
-    setMaterialType(null);
-    setHasPattern(null);
-    setPatternDescription(null);
-    processImageMutation.reset();
+    Alert.alert(
+      "Added!",
+      "Item has been added to your wardrobe.",
+      [{ text: "OK", onPress: handleReset }]
+    );
+  };
+
+  const handleStyleMe = () => {
+    if (!processedImage || !selectedCategory) return;
+
+    const newItem = {
+      id: Date.now().toString(),
+      imageUri: processedImage,
+      category: selectedCategory,
+      colors: detectedColors,
+      addedAt: Date.now(),
+      color: detectedColors[0] || 'unknown',
+      style: 'casual', 
+      confidence: 1.0,
+      materialType: materialType,
+      hasPattern: hasPattern,
+      patternDescription: patternDescription,
+    };
+
+    addItem(newItem);
     
-    router.back();
+    // Navigate to styling screen with the new item
+    router.push({
+      pathname: '/styling',
+      params: { 
+        itemId: newItem.id,
+        fromAdd: 'true'
+      }
+    });
+    
+    handleReset();
   };
 
   const handleReset = () => {
@@ -198,10 +345,14 @@ export default function AddItemScreen() {
     setProcessedImage(null);
     setSelectedCategory(null);
     setDetectedColors([]);
+    setDetectedTexture(null);
+    setDetectedDesign(null);
+    setIsProcessing(false);
+    setAnalysisError(null);
+    setAnalysisSuccess(false);
     setMaterialType(null);
     setHasPattern(null);
     setPatternDescription(null);
-    processImageMutation.reset();
   };
 
   if (showCamera) {
@@ -286,11 +437,16 @@ export default function AddItemScreen() {
                   style={styles.mainPreview}
                   contentFit="contain"
                 />
-                {processImageMutation.isPending && (
+                {isProcessing && (
                   <View style={styles.processingOverlay}>
-                    <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-                    <ActivityIndicator color={Colors.gold[400]} />
-                    <Text style={styles.processingText}>ANALYZING OUTFIT...</Text>
+                    <ActivityIndicator size="large" color={Colors.gold[400]} />
+                    <Text style={styles.processingText}>ANALYZING...</Text>
+                    <TouchableOpacity 
+                      style={styles.skipButton} 
+                      onPress={() => setIsProcessing(false)}
+                    >
+                      <Text style={styles.skipButtonText}>SKIP</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
@@ -301,39 +457,83 @@ export default function AddItemScreen() {
             </View>
 
             <View style={styles.formSection}>
-              {detectedColors.length > 0 && (
-                <View style={{ marginBottom: 24 }}>
-                  <Text style={styles.sectionTitle}>COLOR</Text>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {detectedColors.map((color, index) => (
-                      <View key={index} style={{ 
-                        paddingHorizontal: 16, 
-                        paddingVertical: 8, 
-                        backgroundColor: Colors.card,
-                        borderWidth: 1,
-                        borderColor: Colors.gold[400],
-                        borderRadius: 0,
-                      }}>
-                        <Text style={{ color: Colors.gold[400], fontSize: 12, fontWeight: '600', letterSpacing: 1 }}>
-                          {color.toUpperCase()}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
+              {analysisSuccess && (
+                <View style={styles.successBanner}>
+                  <CheckCircle size={16} color="#4CAF50" />
+                  <Text style={styles.successText}>Analysis complete! Category and details detected.</Text>
                 </View>
               )}
+              
+              {analysisError && (
+                <View style={styles.errorBanner}>
+                  <AlertCircle size={16} color={Colors.gold[400]} />
+                  <Text style={styles.errorText}>{analysisError}</Text>
+                  <TouchableOpacity 
+                    style={styles.retryButton}
+                    onPress={() => {
+                      if (capturedImage) {
+                        setAnalysisError(null);
+                        handleProcessImage(capturedImage);
+                      }
+                    }}
+                  >
+                    <RotateCcw size={14} color={Colors.gold[400]} />
+                    <Text style={styles.retryButtonText}>RETRY</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
+                {detectedColors.length > 0 && (
+                  <View style={{ flex: 1, minWidth: '45%' }}>
+                    <Text style={styles.sectionTitle}>COLOR</Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {detectedColors.map((color, index) => (
+                        <View key={index} style={styles.detectedInfoChip}>
+                          <Text style={styles.detectedInfoText}>
+                            {color.toUpperCase()}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {detectedTexture && (
+                  <View style={{ flex: 1, minWidth: '45%' }}>
+                    <Text style={styles.sectionTitle}>TEXTURE</Text>
+                    <View style={styles.detectedInfoChip}>
+                      <Text style={styles.detectedInfoText}>
+                        {detectedTexture.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {detectedDesign && detectedDesign !== 'none' && (
+                  <View style={{ flex: 1, minWidth: '45%' }}>
+                    <Text style={styles.sectionTitle}>DESIGN</Text>
+                    <View style={styles.detectedInfoChip}>
+                      <Text style={styles.detectedInfoText}>
+                        {detectedDesign.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
 
               <Text style={styles.sectionTitle}>CATEGORY</Text>
               <View style={styles.categoryGrid}>
-                {CATEGORIES.map((cat) => (
+                {categories.map((cat) => (
                   <TouchableOpacity
                     key={cat.id}
                     style={[
                       styles.categoryChip,
                       selectedCategory === cat.id && styles.categoryChipSelected
                     ]}
-                    onPress={() => setSelectedCategory(cat.id)}
+                    onPress={() => setSelectedCategory(cat.id as ClothingCategory)}
                   >
+                    <Text style={styles.categoryIcon}>{cat.icon}</Text>
                     <Text style={[
                       styles.categoryChipText,
                       selectedCategory === cat.id && styles.categoryChipTextSelected
@@ -346,20 +546,33 @@ export default function AddItemScreen() {
             <View style={styles.footer}>
               <TouchableOpacity
                 style={[
-                  styles.saveButton,
-                  (!processedImage || !selectedCategory) && styles.saveButtonDisabled
+                  styles.styleButton,
+                  (!processedImage || !selectedCategory || isProcessing) && styles.saveButtonDisabled
                 ]}
-                onPress={handleSaveItem}
-                disabled={!processedImage || !selectedCategory}
+                onPress={handleStyleMe}
+                disabled={!processedImage || !selectedCategory || isProcessing}
               >
                 <LinearGradient
-                  colors={(!processedImage || !selectedCategory) 
+                  colors={(!processedImage || !selectedCategory || isProcessing) 
                     ? [Colors.gray[200], Colors.gray[200]] 
                     : [Colors.gold[300], Colors.gold[500]]}
                   style={styles.saveButtonGradient}
                 >
-                  <Text style={styles.saveButtonText}>ADD TO WARDROBE</Text>
+                  <Text style={styles.saveButtonText}>✨ STYLE ME</Text>
                 </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.saveButton,
+                  (!processedImage || !selectedCategory || isProcessing) && styles.saveButtonDisabled
+                ]}
+                onPress={handleSaveItem}
+                disabled={!processedImage || !selectedCategory || isProcessing}
+              >
+                <View style={styles.saveButtonOutline}>
+                  <Text style={styles.saveButtonOutlineText}>SAVE TO WARDROBE</Text>
+                </View>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -453,19 +666,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  processingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  processingText: {
-    color: Colors.gold[400],
-    fontSize: 10,
-    marginTop: 12,
-    letterSpacing: 1,
-    fontWeight: '600',
-  },
   retakeButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -494,13 +694,19 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
   },
+  categoryIcon: {
+    fontSize: 20,
+    marginBottom: 8,
+  },
   categoryChip: {
     paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: Colors.gray[200],
     borderRadius: 0,
     backgroundColor: 'transparent',
+    alignItems: 'center',
+    width: '30%',
   },
   categoryChipSelected: {
     borderColor: Colors.gold[400],
@@ -520,6 +726,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 40,
   },
+  styleButton: {
+    borderRadius: 0,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
   saveButton: {
     borderRadius: 0,
     overflow: 'hidden',
@@ -533,6 +744,19 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     color: Colors.richBlack,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 2,
+  },
+  saveButtonOutline: {
+    paddingVertical: 18,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.gold[400],
+    backgroundColor: 'transparent',
+  },
+  saveButtonOutlineText: {
+    color: Colors.gold[400],
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 2,
@@ -600,5 +824,95 @@ const styles = StyleSheet.create({
   },
   permissionButtonText: {
     fontWeight: '600',
+  },
+  processingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  processingText: {
+    color: Colors.gold[400],
+    fontSize: 12,
+    letterSpacing: 2,
+    marginTop: 12,
+    fontWeight: '600',
+  },
+  skipButton: {
+    marginTop: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: Colors.gray[500],
+  },
+  skipButtonText: {
+    color: Colors.gray[400],
+    fontSize: 11,
+    letterSpacing: 1.5,
+    fontWeight: '600',
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(212, 175, 55, 0.1)',
+    borderWidth: 1,
+    borderColor: Colors.gold[400],
+    padding: 12,
+    marginBottom: 20,
+  },
+  errorText: {
+    color: Colors.gold[400],
+    fontSize: 12,
+    flex: 1,
+    letterSpacing: 0.5,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: Colors.gold[400],
+    marginLeft: 8,
+  },
+  retryButtonText: {
+    color: Colors.gold[400],
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  detectedInfoChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.gold[400],
+    borderRadius: 0,
+    alignSelf: 'flex-start',
+  },
+  detectedInfoText: {
+    color: Colors.gold[400],
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 1,
+  },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+    padding: 12,
+    marginBottom: 20,
+  },
+  successText: {
+    color: '#4CAF50',
+    fontSize: 12,
+    flex: 1,
+    letterSpacing: 0.5,
+    fontWeight: '500',
   },
 });

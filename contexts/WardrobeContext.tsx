@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState, useEffect } from "react";
 import { ClothingItem, ClothingCategory } from "@/types/wardrobe";
 import { db, storage, auth } from "@/lib/firebase";
-import { collection, getDocs, addDoc, deleteDoc, doc, query, where } from "firebase/firestore";
+import { collection, getDocs, deleteDoc, doc, query, where, setDoc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
@@ -53,15 +53,35 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
     mutationFn: async (item: Omit<ClothingItem, "userId"> & { userId?: string }) => {
       if (!currentUserId) throw new Error("No authenticated user");
       
+      let imageUrl = item.imageUri;
+      
+      // Upload image if it's not already a remote URL
+      // Base64 starts with 'data:', local file starts with 'file:'
+      const isRemote = imageUrl.startsWith('http');
+      
+      if (!isRemote) {
+          try {
+              console.log('[WardrobeContext] Uploading image before saving...');
+              // Use the item.id for the image path to match the document ID
+              imageUrl = await uploadImage(item.imageUri, item.id);
+          } catch (e) {
+              console.error("Failed to upload image, saving with original URI", e);
+              // If upload fails, we proceed with original URI (fallback), 
+              // but we might want to throw if strict consistency is required.
+          }
+      }
+
       const itemWithUser: ClothingItem = {
         ...item,
+        imageUri: imageUrl,
         userId: currentUserId,
       };
       
       console.log('[WardrobeContext] Adding item to Firestore:', itemWithUser.category);
-      const docRef = await addDoc(collection(db, "wardrobe"), itemWithUser);
-      console.log('[WardrobeContext] Item added successfully with ID:', docRef.id);
-      return { ...itemWithUser, id: docRef.id };
+      // Use setDoc with the ID we generated in the UI
+      await setDoc(doc(db, "wardrobe", item.id), itemWithUser);
+      console.log('[WardrobeContext] Item added successfully with ID:', item.id);
+      return itemWithUser;
     },
     onSuccess: () => {
       console.log('[WardrobeContext] Add mutation success, invalidating queries');
@@ -99,6 +119,25 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
     },
   });
 
+  const updateItemMutation = useMutation({
+    mutationFn: async (item: Partial<ClothingItem> & { id: string }) => {
+      if (!currentUserId) throw new Error("No authenticated user");
+      
+      console.log('[WardrobeContext] Updating item in Firestore:', item.id);
+      const { id, ...updateData } = item;
+      await updateDoc(doc(db, "wardrobe", id), updateData);
+      console.log('[WardrobeContext] Item updated successfully');
+      return item;
+    },
+    onSuccess: () => {
+      console.log('[WardrobeContext] Update mutation success, invalidating queries');
+      queryClient.invalidateQueries({ queryKey: ["wardrobe", currentUserId] });
+    },
+    onError: (error) => {
+      console.error('[WardrobeContext] Update mutation error:', error);
+    },
+  });
+
   const uploadImage = async (uri: string, itemId: string): Promise<string> => {
     if (!currentUserId) throw new Error("No authenticated user");
     
@@ -122,6 +161,11 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
     removeItemMutation.mutate(id);
   };
 
+  const updateItem = (item: Partial<ClothingItem> & { id: string }) => {
+    console.log('[WardrobeContext] Updating item:', item.id);
+    updateItemMutation.mutate(item);
+  };
+
   const getItemsByCategory = useCallback(
     (category: ClothingCategory) => {
       return items.filter((item) => item.category === category);
@@ -133,10 +177,11 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
     items,
     addItem,
     removeItem,
+    updateItem,
     uploadImage,
     getItemsByCategory,
     isLoading: wardrobeQuery.isLoading,
-    isSaving: addItemMutation.isPending || removeItemMutation.isPending,
+    isSaving: addItemMutation.isPending || removeItemMutation.isPending || updateItemMutation.isPending,
     currentUserId,
   };
 });
