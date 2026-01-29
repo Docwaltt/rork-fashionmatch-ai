@@ -89,7 +89,7 @@ export const wardrobeRouter = createTRPCRouter({
           }
 
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout
+          const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout
           
           const response = await fetch(functionUrl, {
             method: "POST",
@@ -165,6 +165,11 @@ export const wardrobeRouter = createTRPCRouter({
 
         console.log("[Wardrobe] Response data keys:", Object.keys(data));
         console.log("[Wardrobe] Full response data (truncated):", JSON.stringify(data).substring(0, 500));
+        
+        // Pass through ANY error message from Genkit if present
+        if (data.error) {
+            console.warn("[Wardrobe] Backend returned error inside success response:", data.error);
+        }
 
         const rawCategory = data.category || data.type || data.label || '';
         const rawColor = data.color || data.colour || data.dominantColor || data.dominant_color || '';
@@ -211,7 +216,13 @@ export const wardrobeRouter = createTRPCRouter({
           return {
             category: data.category?.toLowerCase()?.trim() || 'unknown',
             color: data.color || data.dominantColor || 'unknown',
+            texture: rawTexture,
+            designPattern: rawDesign,
             cleanedImage: null,
+            fabric: rawFabric,
+            patternDescription: rawPattern,
+            hasPattern: rawHasPattern,
+            materialType: rawMaterialType,
             backgroundRemovalFailed: true,
           };
         }
