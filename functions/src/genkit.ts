@@ -33,7 +33,8 @@ async function removeBackgroundWithClipdrop(imageBuffer: Buffer): Promise<string
   const apiKey = "1326cbba949781dca12469e38098136f85ccb6e39f8f8be855d9748379f2b9b4bb7a9536ec76a4cda971db58ed5d6f8b"; 
   
   // Create a Blob from the buffer (Node 20+)
-  const blob = new Blob([imageBuffer], { type: 'image/jpeg' });
+  // Cast to Uint8Array to avoid TS issues with SharedArrayBuffer
+  const blob = new Blob([new Uint8Array(imageBuffer)], { type: 'image/jpeg' });
   
   const formData = new FormData();
   formData.append('image_file', blob, 'image.jpg');
