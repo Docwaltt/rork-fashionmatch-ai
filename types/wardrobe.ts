@@ -10,8 +10,8 @@ export type ClothingItem = {
   color: string;
   style: string;
   fabric?: string;
-  texture?: string; // Added
-  designPattern?: string; // Added
+  texture?: string; 
+  designPattern?: string;
   silhouette?: string;
   confidence: number;
   season?: string;
@@ -20,6 +20,7 @@ export type ClothingItem = {
   materialType?: string;
   hasPattern?: boolean;
   patternDescription?: string;
+  thumbnailUri?: string; // New field for thumbnails
 };
 
 export type OutfitSuggestion = {
@@ -27,4 +28,6 @@ export type OutfitSuggestion = {
   event: string;
   items: ClothingItem[];
   confidence: number;
+  reasoning?: string; // New field for suggestion reasoning
+  pairingDescription?: string; // New field for how to wear it
 };

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../create-context";
 import { MALE_CATEGORIES, FEMALE_CATEGORIES } from "@/types/user";
 import { GoogleAuth } from "google-auth-library";
+import { ClothingItem } from "@/types/wardrobe";
 
 export const wardrobeRouter = createTRPCRouter({
   analyzeImage: publicProcedure
@@ -339,5 +340,27 @@ export const wardrobeRouter = createTRPCRouter({
       }
       
       throw new Error(lastError?.message || "Failed to analyze image. Please try again.");
+    }),
+
+  generateOutfit: publicProcedure
+    .input(z.object({
+      selectedItemId: z.string().optional(),
+      event: z.string().optional(),
+      wardrobeItems: z.array(z.any()), // Passing items from frontend as temporary solution
+    }))
+    .mutation(async ({ input }) => {
+       // This would ideally connect to an AI service to generate outfit suggestions
+       // For now, we will simulate a smart suggestion based on the input
+       console.log("Generating outfit for event:", input.event);
+       
+       // In a real implementation, this would call an AI service
+       // For now we'll return a success signal so the frontend can do the client-side logic
+       // or we could move the logic here.
+       
+       return {
+         success: true,
+         // We could return AI reasoning here
+         reasoning: "Based on the casual event and sunny weather, we suggest a light and comfortable outfit.",
+       };
     }),
 });
