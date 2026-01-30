@@ -139,7 +139,9 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
       // Sanitize update data as well
       const cleanUpdateData = sanitizeForFirestore(updateData);
       
-      await updateDoc(doc(db, "wardrobe", id), cleanUpdateData);
+      // Using 'as any' to bypass the strict type checking error for updateDoc
+      // because cleanUpdateData has dynamic keys which TS finds incompatible with FieldValue
+      await updateDoc(doc(db, "wardrobe", id), cleanUpdateData as any);
       console.log('[WardrobeContext] Item updated successfully');
       return item;
     },

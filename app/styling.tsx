@@ -29,7 +29,7 @@ const EVENT_LABELS: Record<string, string> = {
   workout: "Workout",
 };
 
-const generateReasoningString = (outfit: ClothingItem[], baseItem: ClothingItem | null, eventType: string): string => {
+const generateReasoningString = (outfit: ClothingItem[], baseItem: ClothingItem | null | undefined, eventType: string): string => {
   if (outfit.length === 0) {
     return "No outfit could be generated.";
   }
@@ -87,7 +87,7 @@ export default function StylingScreen() {
   const [suggestedOutfit, setSuggestedOutfit] = useState<ClothingItem[]>([]);
   const [reasoning, setReasoning] = useState<string | null>(null);
   
-  const selectedItem = selectedItemId ? items.find(item => item.id === selectedItemId) : null;
+  const selectedItem = selectedItemId ? items.find(item => item.id === selectedItemId) : undefined;
 
   const generateOutfitMutation = trpc.wardrobe.generateOutfit.useMutation({
      onSuccess: (data) => {
