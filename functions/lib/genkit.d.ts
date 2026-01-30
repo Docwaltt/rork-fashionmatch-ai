@@ -8,6 +8,9 @@ export declare const ClothingSchema: z.ZodObject<{
     isBackgroundRemoved: z.ZodBoolean;
     fabric: z.ZodOptional<z.ZodString>;
     silhouette: z.ZodOptional<z.ZodString>;
+    materialType: z.ZodOptional<z.ZodString>;
+    hasPattern: z.ZodOptional<z.ZodBoolean>;
+    patternDescription: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     category: string;
     color: string;
@@ -17,6 +20,9 @@ export declare const ClothingSchema: z.ZodObject<{
     cleanedImage?: string | undefined;
     fabric?: string | undefined;
     silhouette?: string | undefined;
+    materialType?: string | undefined;
+    hasPattern?: boolean | undefined;
+    patternDescription?: string | undefined;
 }, {
     category: string;
     color: string;
@@ -26,5 +32,8 @@ export declare const ClothingSchema: z.ZodObject<{
     cleanedImage?: string | undefined;
     fabric?: string | undefined;
     silhouette?: string | undefined;
+    materialType?: string | undefined;
+    hasPattern?: boolean | undefined;
+    patternDescription?: string | undefined;
 }>;
 export declare const processClothing: import("genkit").Action<z.ZodAny, z.ZodAny, z.ZodTypeAny>;
