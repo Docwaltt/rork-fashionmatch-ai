@@ -29,6 +29,58 @@ const EVENT_LABELS: Record<string, string> = {
   workout: "Workout",
 };
 
+const generateReasoningString = (outfit: ClothingItem[], baseItem: ClothingItem | null, eventType: string): string => {
+  if (outfit.length === 0) {
+    return "No outfit could be generated.";
+  }
+
+  let reasoning = "";
+  const top = outfit.find(i => ['top', 't-shirt', 'shirt', 'blouse'].includes(i.category));
+  const bottom = outfit.find(i => ['bottom', 'pants', 'jeans', 'shorts', 'skirt', 'trousers'].includes(i.category));
+  const dress = outfit.find(i => ['dress', 'gown', 'jumpsuit'].includes(i.category));
+  const shoes = outfit.find(i => ['shoes', 'sneakers', 'heels', 'boots', 'sandals', 'flats'].includes(i.category));
+  const outerwear = outfit.find(i => ['outerwear', 'jacket', 'coat', 'cardigan'].includes(i.category));
+  const accessory = outfit.find(i => ['accessories', 'bag', 'jewelry'].includes(i.category));
+
+  if (baseItem) {
+    reasoning += `Building around your selected ${baseItem.category}, `;
+  }
+
+  if (dress) {
+    reasoning += `the ${dress.color || ''} ${dress.category} is a perfect standalone piece for a ${eventType} event. `;
+    if (shoes) {
+      reasoning += `We've paired it with ${shoes.category} to complement the look. `;
+    }
+  } else if (top && bottom) {
+    reasoning += `we've paired the ${top.color || ''} ${top.category} with ${bottom.color || ''} ${bottom.category}. `;
+    const combinationReason = "This creates a classic, versatile palette. ";
+    // More complex logic could be added here to evaluate color harmony
+    reasoning += combinationReason;
+    if (shoes) {
+        reasoning += `The ${shoes.category} tie the outfit together. `
+    }
+  } else if (top) {
+      reasoning += `we started with the ${top.color || ''} ${top.category} as a base. `
+  } else if (bottom) {
+      reasoning += `we started with the ${bottom.color || ''} ${bottom.category} as a base. `
+  }
+
+
+  if (outerwear) {
+    reasoning += `The ${outerwear.category} adds a layer of sophistication and warmth. `;
+  }
+  if (accessory) {
+    reasoning += `Finally, the ${accessory.category} provides a stylish finishing touch.`;
+  }
+
+  // Fallback if no specific reasoning could be generated
+  if (reasoning.trim().length < 10) {
+      return `This outfit is curated for a ${eventType} setting, balancing style and comfort with pieces from your wardrobe.`;
+  }
+
+  return reasoning.trim();
+};
+
 export default function StylingScreen() {
   const { event, selectedItemId } = useLocalSearchParams<{ event: string; selectedItemId?: string }>();
   const { items } = useWardrobe();
@@ -39,16 +91,9 @@ export default function StylingScreen() {
 
   const generateOutfitMutation = trpc.wardrobe.generateOutfit.useMutation({
      onSuccess: (data) => {
-        // Here we would ideally parse 'data.outfitIds' returned from backend
-        // For now, we simulate the 'smart' selection logic on client side 
-        // because we haven't fully implemented the complex AI matching on backend yet.
-        // However, we use the reasoning from backend or generate it locally.
-        
-        if (data.reasoning) {
-            setReasoning(data.reasoning);
-        }
-
-        generateSmartOutfit();
+        // Backend provides a generic reasoning, but we generate a specific one on the client
+        // after the outfit is assembled.
+        generateSmartOutfit(data.reasoning); // Pass backend reasoning as a base
      },
      onError: (error) => {
          console.error("Failed to generate outfit via API:", error);
@@ -57,171 +102,86 @@ export default function StylingScreen() {
      }
   });
 
-  const generateSmartOutfit = () => {
+  const generateSmartOutfit = (baseReasoning?: string) => {
       if (items.length === 0) return;
 
       const outfit: ClothingItem[] = [];
       
-      // If a specific item is selected, start with it and build around it
       if (selectedItem) {
         outfit.push(selectedItem);
         
         const otherItems = items.filter(item => item.id !== selectedItem.id);
         const selectedCategory = selectedItem.category;
         
-        // Build complementary outfit based on selected item category
-        // LOGIC: Check weather (simulated), trends (simulated), and basic pairing rules
-        
-        if (selectedCategory === "top" || selectedCategory === "shirt" || selectedCategory === "t-shirt" || selectedCategory === "blouse") {
-          // Selected a top, need bottom and shoes
-          const bottoms = otherItems.filter(item => 
-            item.category === "bottom" || item.category === "pants" || 
-            item.category === "jeans" || item.category === "shorts" || 
-            item.category === "skirt"
-          );
+        if ([...MALE_TOPS, ...FEMALE_TOPS].includes(selectedCategory)) {
+          const bottoms = otherItems.filter(item => [...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(item.category));
           if (bottoms.length > 0) {
             outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
           }
-        } else if (selectedCategory === "bottom" || selectedCategory === "pants" || selectedCategory === "jeans" || selectedCategory === "shorts" || selectedCategory === "skirt") {
-          // Selected a bottom, need top
-          const tops = otherItems.filter(item => 
-            item.category === "top" || item.category === "shirt" || 
-            item.category === "t-shirt" || item.category === "blouse"
-          );
+        } else if ([...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(selectedCategory)) {
+          const tops = otherItems.filter(item => [...MALE_TOPS, ...FEMALE_TOPS].includes(item.category));
           if (tops.length > 0) {
             outfit.push(tops[Math.floor(Math.random() * tops.length)]);
           }
-        } else if (selectedCategory === "dress" || selectedCategory === "gown") {
-          // Dress is complete, just add accessories
-        } else if (selectedCategory === "shoes" || selectedCategory === "heels" || selectedCategory === "sneakers") {
-          // Selected shoes, build full outfit
-          const tops = otherItems.filter(item => 
-            item.category === "top" || item.category === "shirt" || 
-            item.category === "t-shirt" || item.category === "blouse"
-          );
-          const bottoms = otherItems.filter(item => 
-            item.category === "bottom" || item.category === "pants" || 
-            item.category === "jeans" || item.category === "shorts" || 
-            item.category === "skirt"
-          );
-          const dresses = otherItems.filter(item => item.category === "dress" || item.category === "gown");
+        } else if ([...FEMALE_DRESSES].includes(selectedCategory)) {
+          // Dress is a full outfit
+        } else if ([...MALE_SHOES, ...FEMALE_SHOES].includes(selectedCategory)) {
+          const tops = otherItems.filter(item => [...MALE_TOPS, ...FEMALE_TOPS].includes(item.category));
+          const bottoms = otherItems.filter(item => [...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(item.category));
+          const dresses = otherItems.filter(item => [...FEMALE_DRESSES].includes(item.category));
           
           if (dresses.length > 0 && Math.random() > 0.5) {
             outfit.push(dresses[Math.floor(Math.random() * dresses.length)]);
           } else {
-            if (tops.length > 0) {
-              outfit.push(tops[Math.floor(Math.random() * tops.length)]);
-            }
-            if (bottoms.length > 0) {
-              outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
-            }
-          }
-        } else if (selectedCategory === "outerwear" || selectedCategory === "jacket" || selectedCategory === "coat") {
-          // Selected outerwear, need full outfit underneath
-          const tops = otherItems.filter(item => 
-            item.category === "top" || item.category === "shirt" || 
-            item.category === "t-shirt" || item.category === "blouse"
-          );
-          const bottoms = otherItems.filter(item => 
-            item.category === "bottom" || item.category === "pants" || 
-            item.category === "jeans" || item.category === "shorts"
-          );
-          if (tops.length > 0) {
-            outfit.push(tops[Math.floor(Math.random() * tops.length)]);
-          }
-          if (bottoms.length > 0) {
-            outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
+            if (tops.length > 0) outfit.push(tops[Math.floor(Math.random() * tops.length)]);
+            if (bottoms.length > 0) outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
           }
         } else {
-          // For accessories or other categories, build a complete outfit
-          const tops = otherItems.filter(item => 
-            item.category === "top" || item.category === "shirt" || 
-            item.category === "t-shirt" || item.category === "blouse"
-          );
-          const bottoms = otherItems.filter(item => 
-            item.category === "bottom" || item.category === "pants" || 
-            item.category === "jeans" || item.category === "shorts" || 
-            item.category === "skirt"
-          );
-          if (tops.length > 0) {
-            outfit.push(tops[Math.floor(Math.random() * tops.length)]);
-          }
-          if (bottoms.length > 0) {
-            outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
-          }
+          const tops = otherItems.filter(item => [...MALE_TOPS, ...FEMALE_TOPS].includes(item.category));
+          const bottoms = otherItems.filter(item => [...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(item.category));
+          if (tops.length > 0) outfit.push(tops[Math.floor(Math.random() * tops.length)]);
+          if (bottoms.length > 0) outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
         }
         
-        // Add shoes if not already selected and available
-        if (selectedCategory !== "shoes" && selectedCategory !== "heels" && selectedCategory !== "sneakers") {
-          const shoes = otherItems.filter(item => 
-            item.category === "shoes" || item.category === "heels" || item.category === "sneakers"
-          );
+        if (![...MALE_SHOES, ...FEMALE_SHOES].includes(selectedCategory)) {
+          const shoes = otherItems.filter(item => [...MALE_SHOES, ...FEMALE_SHOES].includes(item.category));
           if (shoes.length > 0) {
             outfit.push(shoes[Math.floor(Math.random() * shoes.length)]);
           }
         }
         
-        // Optionally add accessories if not already selected
-        if (selectedCategory !== "accessories" && selectedCategory !== "bag" && selectedCategory !== "jewelry") {
-          const accessories = otherItems.filter(item => 
-            item.category === "accessories" || item.category === "bag" || item.category === "jewelry"
-          );
+        if (![...MALE_ACCESSORIES, ...FEMALE_ACCESSORIES].includes(selectedCategory)) {
+          const accessories = otherItems.filter(item => [...MALE_ACCESSORIES, ...FEMALE_ACCESSORIES].includes(item.category));
           if (accessories.length > 0 && Math.random() > 0.5) {
             outfit.push(accessories[Math.floor(Math.random() * accessories.length)]);
           }
         }
         
-        // Optionally add outerwear if not already selected
-        if (selectedCategory !== "outerwear" && selectedCategory !== "jacket" && selectedCategory !== "coat") {
-          const outerwear = otherItems.filter(item => 
-            item.category === "outerwear" || item.category === "jacket" || item.category === "coat"
-          );
-          if (outerwear.length > 0 && Math.random() > 0.7) {
-            outfit.push(outerwear[Math.floor(Math.random() * outerwear.length)]);
-          }
-        }
-        
       } else {
-        // Original logic when no specific item is selected
-        const tops = items.filter((item) => item.category === "top");
-        const bottoms = items.filter((item) => item.category === "bottom");
-        const dresses = items.filter((item) => item.category === "dress");
+        const tops = items.filter((item) => [...MALE_TOPS, ...FEMALE_TOPS].includes(item.category));
+        const bottoms = items.filter((item) => [...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(item.category));
+        const dresses = items.filter((item) => [...FEMALE_DRESSES].includes(item.category));
 
         if (dresses.length > 0 && Math.random() > 0.5) {
           outfit.push(dresses[Math.floor(Math.random() * dresses.length)]);
         } else {
-          if (tops.length > 0) {
-            outfit.push(tops[Math.floor(Math.random() * tops.length)]);
-          }
-          if (bottoms.length > 0) {
-            outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
-          }
+          if (tops.length > 0) outfit.push(tops[Math.floor(Math.random() * tops.length)]);
+          if (bottoms.length > 0) outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
         }
 
-        const outerwear = items.filter((item) => item.category === "outerwear");
-        if (outerwear.length > 0 && Math.random() > 0.6) {
-          outfit.push(outerwear[Math.floor(Math.random() * outerwear.length)]);
-        }
-
-        const shoes = items.filter((item) => item.category === "shoes");
+        const shoes = items.filter((item) => [...MALE_SHOES, ...FEMALE_SHOES].includes(item.category));
         if (shoes.length > 0) {
           outfit.push(shoes[Math.floor(Math.random() * shoes.length)]);
         }
-
-        const accessories = items.filter((item) => item.category === "accessories");
-        if (accessories.length > 0 && Math.random() > 0.5) {
-          outfit.push(accessories[Math.floor(Math.random() * accessories.length)]);
-        }
       }
       
-      // Order outfit logically: Outerwear -> Top -> Bottom -> Shoes -> Accessories
       const orderedOutfit = outfit.sort((a, b) => {
         const order = {
-          'outerwear': 1, 'jacket': 1, 'coat': 1,
-          'dress': 2, 'gown': 2, 'top': 2, 'shirt': 2, 't-shirt': 2, 'blouse': 2,
-          'bottom': 3, 'pants': 3, 'jeans': 3, 'shorts': 3, 'skirt': 3,
-          'shoes': 4, 'sneakers': 4, 'heels': 4, 'boots': 4,
-          'accessories': 5, 'bag': 5, 'jewelry': 5
+          'outerwear': 1, 'jacket': 1, 'coat': 1, 'cardigan': 1,
+          'dress': 2, 'gown': 2, 'jumpsuit': 2, 'top': 2, 'shirt': 2, 't-shirt': 2, 'blouse': 2,
+          'bottom': 3, 'pants': 3, 'jeans': 3, 'shorts': 3, 'skirt': 3, 'trousers': 3,
+          'shoes': 4, 'sneakers': 4, 'heels': 4, 'boots': 4, 'sandals': 4, 'flats': 4,
+          'accessories': 5, 'bag': 5, 'jewelry': 5, 'tie': 5
         };
         
         const orderA = order[a.category as keyof typeof order] || 99;
@@ -231,14 +191,12 @@ export default function StylingScreen() {
       });
 
       setSuggestedOutfit(orderedOutfit);
-      if (!reasoning) {
-        setReasoning(`Styled for a ${event || 'casual'} look with matching colors and textures.`);
-      }
+      
+      const specificReasoning = generateReasoningString(orderedOutfit, selectedItem, event || 'casual');
+      setReasoning(specificReasoning);
   }
 
   const handleGenerateOutfit = () => {
-    // Pass minimal data to backend to 'trigger' the AI process
-    // In a real app, we would send item IDs and let backend do full retrieval
     generateOutfitMutation.mutate({
         selectedItemId,
         event: event || 'casual',
@@ -355,6 +313,18 @@ export default function StylingScreen() {
     </View>
   );
 }
+
+// NOTE: These category arrays would ideally be shared from a central types file
+const MALE_TOPS = ['t-shirt', 'shirt', 'sweater', 'top'];
+const MALE_BOTTOMS = ['trousers', 'jeans', 'shorts', 'bottom'];
+const MALE_SHOES = ['sneakers', 'boots', 'shoes'];
+const MALE_ACCESSORIES = ['tie', 'bag', 'accessories'];
+
+const FEMALE_TOPS = ['blouse', 'top', 'sweater', 'cardigan', 't-shirt'];
+const FEMALE_BOTTOMS = ['skirt', 'pants', 'jeans', 'shorts', 'bottom'];
+const FEMALE_DRESSES = ['dress', 'gown', 'jumpsuit'];
+const FEMALE_SHOES = ['heels', 'flats', 'sandals', 'boots', 'sneakers', 'shoes'];
+const FEMALE_ACCESSORIES = ['bag', 'jewelry', 'accessories'];
 
 const styles = StyleSheet.create({
   container: {
