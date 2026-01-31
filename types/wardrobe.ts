@@ -22,6 +22,7 @@ export type ClothingItem = {
   imageUri: string;
   category: ClothingCategory;
   color: string;
+  colors?: string[];
   style: string;
   fabric?: string;
   texture?: string; 
