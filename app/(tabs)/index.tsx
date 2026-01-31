@@ -1,3 +1,39 @@
+// Inside the item detail modal's JSX, add these blocks to display the new info.
+// A good place is after the "SEASON" detail and before the "Added" date.
+
+{selectedItem.season && (
+  <View style={styles.detailRow}>
+    <Text style={styles.detailLabel}>SEASON</Text>
+    <Text style={styles.detailValue}>{selectedItem.season}</Text>
+  </View>
+)}
+
+{/* Add these new blocks below */}
+{selectedItem.material && (
+  <View style={styles.detailRow}>
+    <Text style={styles.detailLabel}>MATERIAL</Text>
+    <Text style={styles.detailValue}>{selectedItem.material}</Text>
+  </View>
+)}
+
+{selectedItem.fabric && (
+  <View style={styles.detailRow}>
+    <Text style={styles.detailLabel}>FABRIC</Text>
+    <Text style={styles.detailValue}>{selectedItem.fabric}</Text>
+  </View>
+)}
+
+{selectedItem.pattern && (
+  <View style={styles.detailRow}>
+    <Text style={styles.detailLabel}>PATTERN</Text>
+    <Text style={styles.detailValue}>{selectedItem.pattern}</Text>
+  </View>
+)}
+{/* End of new blocks */}
+
+<Text style={styles.modalDate}>
+  Added {new Date(selectedItem.addedAt).toLocaleDateString()}
+</Text>
 import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import { router } from "expo-router";

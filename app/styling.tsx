@@ -90,12 +90,12 @@ export default function StylingScreen() {
   const selectedItem = selectedItemId ? items.find(item => item.id === selectedItemId) : undefined;
 
   const generateOutfitMutation = trpc.wardrobe.generateOutfit.useMutation({
-     onSuccess: (data) => {
+     onSuccess: (data: { reasoning: string }) => {
         // Backend provides a generic reasoning, but we generate a specific one on the client
         // after the outfit is assembled.
         generateSmartOutfit(data.reasoning); // Pass backend reasoning as a base
      },
-     onError: (error) => {
+     onError: (error: any) => {
          console.error("Failed to generate outfit via API:", error);
          // Fallback to client-side logic
          generateSmartOutfit();

@@ -1,3 +1,17 @@
+export interface WardrobeItem {
+  id: string;
+  userId: string;
+  imageUrl: string;
+  category: string;
+  subCategory?: string;
+  colors: string[];
+  season?: 'Spring' | 'Summer' | 'Autumn' | 'Winter';
+  occasion?: 'Casual' | 'Formal' | 'Work' | 'Party' | 'Sport';
+  fabric?: string;
+  material?: string;
+  pattern?: string;
+  addedAt: string;
+}
 import { MaleClothingCategory, FemaleClothingCategory } from "./user";
 
 export type ClothingCategory = MaleClothingCategory | FemaleClothingCategory | "top" | "bottom" | "dress" | "outerwear" | "shoes" | "accessories";
@@ -21,6 +35,8 @@ export type ClothingItem = {
   hasPattern?: boolean;
   patternDescription?: string;
   thumbnailUri?: string; // New field for thumbnails
+  material?: string; // Added to match user request
+  pattern?: string; // Added to match user request
 };
 
 export type OutfitSuggestion = {

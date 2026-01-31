@@ -14,7 +14,8 @@ import {
   StatusBar,
   Platform,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  TextInput
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -86,40 +87,40 @@ export default function AddItemScreen() {
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<ClothingCategory | null>(null);
   const [detectedColors, setDetectedColors] = useState<string[]>([]);
-   const [detectedTexture, setDetectedTexture] = useState<string | null>(null);
-   const [detectedDesign, setDetectedDesign] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisSuccess, setAnalysisSuccess] = useState<boolean>(false);
   const { addItem } = useWardrobe();
-  const [materialType, setMaterialType] = useState<string | null>(null);
-  const [hasPattern, setHasPattern] = useState<boolean | null>(null);
-  const [patternDescription, setPatternDescription] = useState<string | null>(null);
+  
+  // New state variables for detailed fields
+  const [material, setMaterial] = useState('');
+  const [fabric, setFabric] = useState('');
+  const [pattern, setPattern] = useState('');
 
-  const analyzeImageMutation = trpc.wardrobe.analyzeImage.useMutation({
-    onSuccess: (data) => {
+  const analyzeImageMutation = trpc.wardrobe.analyze.useMutation({
+    onSuccess: (data: any) => {
       console.log("[AddItem] Processing successful. Response data:", {
         category: data.category,
         color: data.color,
-        hasCleanedImage: !!data.cleanedImage
+        hasCleanedImage: !!data.cleanedImageUrl
       });
       setAnalysisError(null);
       setAnalysisSuccess(true);
       
-      if (data.cleanedImage) {
-        setProcessedImage(data.cleanedImage);
+      if (data.cleanedImageUrl) {
+        setProcessedImage(data.cleanedImageUrl);
       } else {
         console.log("[AddItem] No cleaned image returned from AI");
       }
       if (data.color) {
         setDetectedColors([data.color]);
       }
-      if (data.fabric) {
-        setDetectedTexture(data.fabric);
-      }
-      if (data.hasPattern) {
-        setDetectedDesign(data.patternDescription || 'Patterned');
-      }
+      
+      // Update new fields from analysis data
+      if (data.material) setMaterial(String(data.material));
+      if (data.fabric) setFabric(data.fabric);
+      if (data.pattern) setPattern(String(data.pattern));
+
       if (data.category) {
         const validCategories = categories.map(c => c.id);
         const returnedCategory = data.category as ClothingCategory;
@@ -151,16 +152,6 @@ export default function AddItemScreen() {
              }
            }
         }
-      }
-
-      if (data.materialType) {
-        setMaterialType(data.materialType);
-      }
-      if (data.hasPattern) {
-        setHasPattern(data.hasPattern);
-      }
-      if (data.patternDescription) {
-        setPatternDescription(data.patternDescription);
       }
       setIsProcessing(false);
     },
@@ -212,10 +203,10 @@ export default function AddItemScreen() {
 
       const apiUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
       console.log("[AddItem] API Base URL:", apiUrl || "(not set, using relative path)");
-      console.log("[AddItem] Calling tRPC wardrobe.analyzeImage...");
+      console.log("[AddItem] Calling tRPC wardrobe.analyze...");
       
       analyzeImageMutation.mutate({
-        image: base64Image,
+        imageUrl: base64Image, // Changed from image to imageUrl to match backend
         gender: userProfile?.gender || undefined,
       });
 
@@ -232,7 +223,6 @@ export default function AddItemScreen() {
       return getCategoriesForGender(userProfile.gender);
     }
     // Fallback if profile is missing or loading
-    // Return a default list of common categories to ensure the UI is not empty
     const fallbackCategories: { id: ClothingCategory; label: string; icon: string }[] = [
       { id: 'top', label: 'Top', icon: '👕' },
       { id: 'bottom', label: 'Bottom', icon: '👖' },
@@ -292,15 +282,14 @@ export default function AddItemScreen() {
       category: selectedCategory,
       colors: detectedColors,
       addedAt: Date.now(),
-      materialType: materialType ?? undefined,
-      hasPattern: hasPattern ?? undefined,
-      patternDescription: patternDescription ?? undefined,
-      texture: detectedTexture ?? undefined,
-      designPattern: detectedDesign ?? undefined,
-      fabric: detectedTexture ?? undefined,
       color: detectedColors[0] || 'unknown',
-      style: 'casual', // default, user can edit later
-      confidence: 1.0, // manually added
+      style: 'casual', 
+      confidence: 1.0,
+      
+      // Include new fields
+      material,
+      fabric,
+      pattern,
     };
 
     addItem(newItem);
@@ -324,12 +313,11 @@ export default function AddItemScreen() {
       color: detectedColors[0] || 'unknown',
       style: 'casual', 
       confidence: 1.0,
-      materialType: materialType ?? undefined,
-      hasPattern: hasPattern ?? undefined,
-      patternDescription: patternDescription ?? undefined,
-      texture: detectedTexture ?? undefined,
-      designPattern: detectedDesign ?? undefined,
-      fabric: detectedTexture ?? undefined,
+      
+      // Include new fields
+      material,
+      fabric,
+      pattern,
     };
 
     addItem(newItem);
@@ -351,14 +339,12 @@ export default function AddItemScreen() {
     setProcessedImage(null);
     setSelectedCategory(null);
     setDetectedColors([]);
-    setDetectedTexture(null);
-    setDetectedDesign(null);
     setIsProcessing(false);
     setAnalysisError(null);
     setAnalysisSuccess(false);
-    setMaterialType(null);
-    setHasPattern(null);
-    setPatternDescription(null);
+    setMaterial('');
+    setFabric('');
+    setPattern('');
   };
 
   if (showCamera) {
@@ -488,57 +474,37 @@ export default function AddItemScreen() {
                   </TouchableOpacity>
                 </View>
               )}
-              
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
-                {detectedColors.length > 0 && (
-                  <View style={{ flex: 1, minWidth: '45%' }}>
-                    <Text style={styles.sectionTitle}>COLOR</Text>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      {detectedColors.map((color, index) => (
-                        <View key={index} style={styles.detectedInfoChip}>
-                          <Text style={styles.detectedInfoText}>
-                            {color.toUpperCase()}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
 
-                {detectedTexture && (
-                  <View style={{ flex: 1, minWidth: '45%' }}>
-                    <Text style={styles.sectionTitle}>TEXTURE</Text>
-                    <View style={styles.detectedInfoChip}>
-                      <Text style={styles.detectedInfoText}>
-                        {detectedTexture.toUpperCase()}
-                      </Text>
-                    </View>
-                  </View>
-                )}
+              {/* New Editable Fields */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>MATERIAL</Text>
+                <TextInput
+                  style={styles.input}
+                  value={material}
+                  onChangeText={setMaterial}
+                  placeholder="e.g., Woven, Knit"
+                  placeholderTextColor={Colors.gray[600]}
+                />
 
-                {materialType && (
-                  <View style={{ flex: 1, minWidth: '45%' }}>
-                    <Text style={styles.sectionTitle}>MATERIAL</Text>
-                    <View style={styles.detectedInfoChip}>
-                      <Text style={styles.detectedInfoText}>
-                        {materialType.toUpperCase()}
-                      </Text>
-                    </View>
-                  </View>
-                )}
+                <Text style={styles.label}>FABRIC</Text>
+                <TextInput
+                  style={styles.input}
+                  value={fabric}
+                  onChangeText={setFabric}
+                  placeholder="e.g., Cotton, Denim, Silk"
+                  placeholderTextColor={Colors.gray[600]}
+                />
 
-                {detectedDesign && detectedDesign !== 'none' && (
-                  <View style={{ flex: 1, minWidth: '45%' }}>
-                    <Text style={styles.sectionTitle}>DESIGN</Text>
-                    <View style={styles.detectedInfoChip}>
-                      <Text style={styles.detectedInfoText}>
-                        {detectedDesign.toUpperCase()}
-                      </Text>
-                    </View>
-                  </View>
-                )}
+                <Text style={styles.label}>PATTERN</Text>
+                <TextInput
+                  style={styles.input}
+                  value={pattern}
+                  onChangeText={setPattern}
+                  placeholder="e.g., Solid, Striped, Plaid"
+                  placeholderTextColor={Colors.gray[600]}
+                />
               </View>
-
+              
               <Text style={styles.sectionTitle}>CATEGORY</Text>
               <View style={styles.categoryGrid}>
                 {categories.map((cat) => (
@@ -900,21 +866,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1,
   },
-  detectedInfoChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: Colors.card,
-    borderWidth: 1,
-    borderColor: Colors.gold[400],
-    borderRadius: 0,
-    alignSelf: 'flex-start',
-  },
-  detectedInfoText: {
-    color: Colors.gold[400],
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 1,
-  },
   successBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -931,5 +882,24 @@ const styles = StyleSheet.create({
     flex: 1,
     letterSpacing: 0.5,
     fontWeight: '500',
+  },
+  inputGroup: {
+    marginBottom: 24,
+    gap: 16,
+  },
+  label: {
+    fontSize: 10,
+    color: Colors.gray[500],
+    letterSpacing: 2,
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  input: {
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.gray[200],
+    color: Colors.white,
+    padding: 12,
+    fontSize: 14,
   },
 });
