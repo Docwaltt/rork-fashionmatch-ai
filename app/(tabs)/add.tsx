@@ -122,7 +122,7 @@ export default function AddItemScreen() {
       if (data.pattern) setPattern(String(data.pattern));
 
       if (data.category) {
-        const validCategories = categories.map(c => c.id);
+        const validCategories = categories.map((c: { id: ClothingCategory }) => c.id);
         const returnedCategory = data.category as ClothingCategory;
 
         if (validCategories.includes(returnedCategory)) {
@@ -132,7 +132,7 @@ export default function AddItemScreen() {
            console.log("[AddItem] Category from API not in valid list:", returnedCategory);
            // Try one last mapping check on the client side
            const lowercaseCat = returnedCategory.toLowerCase();
-           const match = validCategories.find(id =>
+           const match = validCategories.find((id: string) =>
              lowercaseCat.includes(id.toLowerCase()) ||
              id.toLowerCase().includes(lowercaseCat)
            );
@@ -142,9 +142,9 @@ export default function AddItemScreen() {
            } else {
              // Second pass: word by word matching
              const words = lowercaseCat.split(/\s+/);
-             const wordMatch = validCategories.find(id => {
+             const wordMatch = validCategories.find((id: string) => {
                const idLower = id.toLowerCase();
-               return words.some(word => word.length > 3 && (idLower.includes(word) || word.includes(idLower)));
+               return words.some((word: string) => word.length > 3 && (idLower.includes(word) || word.includes(idLower)));
              });
              if (wordMatch) {
                console.log("[AddItem] Client-side word-based match found:", wordMatch);
@@ -371,7 +371,7 @@ export default function AddItemScreen() {
             <View style={styles.cameraControls}>
               <TouchableOpacity 
                 style={styles.flipButton} 
-                onPress={() => setFacing(current => (current === "back" ? "front" : "back"))}
+                onPress={() => setFacing((current: CameraType) => (current === "back" ? "front" : "back"))}
               >
                 <RefreshCcw size={24} color="white" />
               </TouchableOpacity>
@@ -507,7 +507,7 @@ export default function AddItemScreen() {
               
               <Text style={styles.sectionTitle}>CATEGORY</Text>
               <View style={styles.categoryGrid}>
-                {categories.map((cat) => (
+                {categories.map((cat: { id: ClothingCategory; label: string; icon: string }) => (
                   <TouchableOpacity
                     key={cat.id}
                     style={[

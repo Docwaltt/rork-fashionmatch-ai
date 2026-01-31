@@ -1,6 +1,6 @@
 import { onCallGenkit } from 'firebase-functions/https';
 import { onRequest } from 'firebase-functions/v2/https';
-import { processClothing } from './genkit.js';
+import { processClothing } from './clothing-flow.js';
 
 // 1. Callable Function (for direct usage from App via SDK)
 export const analyzeImage = onCallGenkit({
@@ -15,7 +15,7 @@ export const processClothingFn = onRequest({
   timeoutSeconds: 300,
   region: 'us-central1',
   cors: true, 
-}, async (req, res) => {
+}, async (req: any, res: any) => {
   // Debug Logging
   console.log("Request received. Headers:", JSON.stringify(req.headers));
   console.log("Body type:", typeof req.body);

@@ -10,6 +10,7 @@ import { BlurView } from "expo-blur";
 import Colors from "@/constants/colors";
 import { useWardrobe } from "@/contexts/WardrobeContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { ClothingItem } from "@/types/wardrobe";
 import { getCategoriesForGender } from "@/types/user";
 
 export default function ProfileScreen() {
@@ -45,7 +46,7 @@ export default function ProfileScreen() {
   };
 
   const getCategoryCount = (categoryId: string) => {
-    return items.filter((item) => item.category === categoryId).length;
+    return items.filter((item: ClothingItem) => item.category === categoryId).length;
   };
 
   return (

@@ -14,7 +14,7 @@ import Colors from "@/constants/colors";
 
 SplashScreen.preventAutoHideAsync();
 
-function AuthGate({ children }: { children: React.ReactNode }) {
+function AuthGate({ children }: { children?: React.ReactNode }) {
   const { isInitialized, isAuthenticated, hasProfile } = useAuth();
   const segments = useSegments();
   const navigationState = useRootNavigationState();

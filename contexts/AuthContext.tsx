@@ -26,7 +26,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   useEffect(() => {
     console.log("[AuthContext] Setting up auth state listener");
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user: FirebaseUser | null) => {
       console.log("[AuthContext] Auth state changed:", user?.email);
       setFirebaseUser(user);
       
@@ -102,7 +102,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       return userCredential.user;
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error("[AuthContext] Sign up error:", error);
     },
   });
@@ -113,7 +113,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       return userCredential.user;
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error("[AuthContext] Sign in error:", error);
     },
   });
@@ -169,7 +169,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       setUserProfile(profile);
       return profile;
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error("[AuthContext] Create profile error:", error);
     },
   });

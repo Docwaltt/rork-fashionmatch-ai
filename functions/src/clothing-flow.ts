@@ -70,7 +70,7 @@ export const processClothing = ai.defineFlow(
     inputSchema: z.any(), 
     outputSchema: z.any(),
   },
-  async (inputData) => {
+  async (inputData: any) => {
     let imageUri: string = "";
     
     if (typeof inputData === 'string') {

@@ -41,7 +41,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Wardrobe",
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
             <View style={{ alignItems: 'center' }}>
               <Shirt size={22} color={color} strokeWidth={focused ? 1.5 : 1} />
               {focused && <View style={styles.activeDot} />}
@@ -53,7 +53,7 @@ export default function TabLayout() {
         name="add"
         options={{
           title: "Add",
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
             <View style={styles.addButtonContainer}>
               <View style={[styles.addButton, { borderColor: focused ? Colors.tint : Colors.gray[500] }]}>
                 <Plus size={24} color={Colors.richBlack} strokeWidth={1.5} />
@@ -67,7 +67,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
             <View style={{ alignItems: 'center' }}>
               <User size={22} color={color} strokeWidth={focused ? 1.5 : 1} />
               {focused && <View style={styles.activeDot} />}

@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState, useEffect } from "react";
 import { ClothingItem, ClothingCategory } from "@/types/wardrobe";
 import { db, storage, auth } from "@/lib/firebase";
-import { collection, getDocs, deleteDoc, doc, query, where, setDoc, updateDoc } from "firebase/firestore";
+import { User } from "firebase/auth";
+import { collection, getDocs, deleteDoc, doc, query, where, setDoc, updateDoc, QueryDocumentSnapshot } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 // Helper to sanitize data for Firestore (removes undefined values)
@@ -19,7 +20,7 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
+    const unsubscribe = auth.onAuthStateChanged((user: User | null) => {
       console.log('[WardrobeContext] Auth state changed, user:', user?.uid);
       setCurrentUserId(user?.uid || null);
       if (user) {
@@ -46,7 +47,7 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
       );
       const querySnapshot = await getDocs(q);
       const fetchedItems: ClothingItem[] = [];
-      querySnapshot.forEach((docSnap) => {
+      querySnapshot.forEach((docSnap: QueryDocumentSnapshot) => {
         fetchedItems.push({ ...docSnap.data(), id: docSnap.id } as ClothingItem);
       });
       console.log('[WardrobeContext] Fetched items:', fetchedItems.length);
@@ -97,7 +98,7 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
       console.log('[WardrobeContext] Add mutation success, invalidating queries');
       queryClient.invalidateQueries({ queryKey: ["wardrobe", currentUserId] });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error('[WardrobeContext] Add mutation error:', error);
     },
   });
@@ -124,7 +125,7 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
       console.log('[WardrobeContext] Remove mutation success, invalidating queries');
       queryClient.invalidateQueries({ queryKey: ["wardrobe", currentUserId] });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error('[WardrobeContext] Remove mutation error:', error);
     },
   });
@@ -149,7 +150,7 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
       console.log('[WardrobeContext] Update mutation success, invalidating queries');
       queryClient.invalidateQueries({ queryKey: ["wardrobe", currentUserId] });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error('[WardrobeContext] Update mutation error:', error);
     },
   });
@@ -184,7 +185,7 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
 
   const getItemsByCategory = useCallback(
     (category: ClothingCategory) => {
-      return items.filter((item) => item.category === category);
+      return items.filter((item: ClothingItem) => item.category === category);
     },
     [items]
   );

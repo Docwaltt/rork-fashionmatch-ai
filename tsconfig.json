@@ -3,6 +3,7 @@
   "compilerOptions": {
     "target": "ESNext",
     "lib": ["dom", "dom.iterable", "esnext"],
+    "esModuleInterop": true,
     "baseUrl": null,
     "strict": true,
     "paths": {

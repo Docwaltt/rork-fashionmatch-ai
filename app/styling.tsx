@@ -35,12 +35,12 @@ const generateReasoningString = (outfit: ClothingItem[], baseItem: ClothingItem 
   }
 
   let reasoning = "";
-  const top = outfit.find(i => ['top', 't-shirt', 'shirt', 'blouse'].includes(i.category));
-  const bottom = outfit.find(i => ['bottom', 'pants', 'jeans', 'shorts', 'skirt', 'trousers'].includes(i.category));
-  const dress = outfit.find(i => ['dress', 'gown', 'jumpsuit'].includes(i.category));
-  const shoes = outfit.find(i => ['shoes', 'sneakers', 'heels', 'boots', 'sandals', 'flats'].includes(i.category));
-  const outerwear = outfit.find(i => ['outerwear', 'jacket', 'coat', 'cardigan'].includes(i.category));
-  const accessory = outfit.find(i => ['accessories', 'bag', 'jewelry'].includes(i.category));
+  const top = outfit.find((i: ClothingItem) => ['top', 't-shirt', 'shirt', 'blouse'].includes(i.category));
+  const bottom = outfit.find((i: ClothingItem) => ['bottom', 'pants', 'jeans', 'shorts', 'skirt', 'trousers'].includes(i.category));
+  const dress = outfit.find((i: ClothingItem) => ['dress', 'gown', 'jumpsuit'].includes(i.category));
+  const shoes = outfit.find((i: ClothingItem) => ['shoes', 'sneakers', 'heels', 'boots', 'sandals', 'flats'].includes(i.category));
+  const outerwear = outfit.find((i: ClothingItem) => ['outerwear', 'jacket', 'coat', 'cardigan'].includes(i.category));
+  const accessory = outfit.find((i: ClothingItem) => ['accessories', 'bag', 'jewelry'].includes(i.category));
 
   if (baseItem) {
     reasoning += `Building around your selected ${baseItem.category}, `;
@@ -87,7 +87,7 @@ export default function StylingScreen() {
   const [suggestedOutfit, setSuggestedOutfit] = useState<ClothingItem[]>([]);
   const [reasoning, setReasoning] = useState<string | null>(null);
   
-  const selectedItem = selectedItemId ? items.find(item => item.id === selectedItemId) : undefined;
+  const selectedItem = selectedItemId ? items.find((item: ClothingItem) => item.id === selectedItemId) : undefined;
 
   const generateOutfitMutation = trpc.wardrobe.generateOutfit.useMutation({
      onSuccess: (data: { reasoning: string }) => {
@@ -110,25 +110,25 @@ export default function StylingScreen() {
       if (selectedItem) {
         outfit.push(selectedItem);
         
-        const otherItems = items.filter(item => item.id !== selectedItem.id);
+        const otherItems = items.filter((item: ClothingItem) => item.id !== selectedItem.id);
         const selectedCategory = selectedItem.category;
         
-        if ([...MALE_TOPS, ...FEMALE_TOPS].includes(selectedCategory)) {
-          const bottoms = otherItems.filter(item => [...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(item.category));
+        if ([...MALE_TOPS, ...FEMALE_TOPS].includes(selectedCategory as any)) {
+          const bottoms = otherItems.filter((item: ClothingItem) => [...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(item.category as any));
           if (bottoms.length > 0) {
             outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
           }
-        } else if ([...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(selectedCategory)) {
-          const tops = otherItems.filter(item => [...MALE_TOPS, ...FEMALE_TOPS].includes(item.category));
+        } else if ([...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(selectedCategory as any)) {
+          const tops = otherItems.filter((item: ClothingItem) => [...MALE_TOPS, ...FEMALE_TOPS].includes(item.category as any));
           if (tops.length > 0) {
             outfit.push(tops[Math.floor(Math.random() * tops.length)]);
           }
-        } else if ([...FEMALE_DRESSES].includes(selectedCategory)) {
+        } else if ([...FEMALE_DRESSES].includes(selectedCategory as any)) {
           // Dress is a full outfit
-        } else if ([...MALE_SHOES, ...FEMALE_SHOES].includes(selectedCategory)) {
-          const tops = otherItems.filter(item => [...MALE_TOPS, ...FEMALE_TOPS].includes(item.category));
-          const bottoms = otherItems.filter(item => [...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(item.category));
-          const dresses = otherItems.filter(item => [...FEMALE_DRESSES].includes(item.category));
+        } else if ([...MALE_SHOES, ...FEMALE_SHOES].includes(selectedCategory as any)) {
+          const tops = otherItems.filter((item: ClothingItem) => [...MALE_TOPS, ...FEMALE_TOPS].includes(item.category as any));
+          const bottoms = otherItems.filter((item: ClothingItem) => [...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(item.category as any));
+          const dresses = otherItems.filter((item: ClothingItem) => [...FEMALE_DRESSES].includes(item.category as any));
           
           if (dresses.length > 0 && Math.random() > 0.5) {
             outfit.push(dresses[Math.floor(Math.random() * dresses.length)]);
@@ -137,30 +137,30 @@ export default function StylingScreen() {
             if (bottoms.length > 0) outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
           }
         } else {
-          const tops = otherItems.filter(item => [...MALE_TOPS, ...FEMALE_TOPS].includes(item.category));
-          const bottoms = otherItems.filter(item => [...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(item.category));
+          const tops = otherItems.filter((item: ClothingItem) => [...MALE_TOPS, ...FEMALE_TOPS].includes(item.category as any));
+          const bottoms = otherItems.filter((item: ClothingItem) => [...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(item.category as any));
           if (tops.length > 0) outfit.push(tops[Math.floor(Math.random() * tops.length)]);
           if (bottoms.length > 0) outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
         }
         
-        if (![...MALE_SHOES, ...FEMALE_SHOES].includes(selectedCategory)) {
-          const shoes = otherItems.filter(item => [...MALE_SHOES, ...FEMALE_SHOES].includes(item.category));
+        if (![...MALE_SHOES, ...FEMALE_SHOES].includes(selectedCategory as any)) {
+          const shoes = otherItems.filter((item: ClothingItem) => [...MALE_SHOES, ...FEMALE_SHOES].includes(item.category as any));
           if (shoes.length > 0) {
             outfit.push(shoes[Math.floor(Math.random() * shoes.length)]);
           }
         }
         
-        if (![...MALE_ACCESSORIES, ...FEMALE_ACCESSORIES].includes(selectedCategory)) {
-          const accessories = otherItems.filter(item => [...MALE_ACCESSORIES, ...FEMALE_ACCESSORIES].includes(item.category));
+        if (![...MALE_ACCESSORIES, ...FEMALE_ACCESSORIES].includes(selectedCategory as any)) {
+          const accessories = otherItems.filter((item: ClothingItem) => [...MALE_ACCESSORIES, ...FEMALE_ACCESSORIES].includes(item.category as any));
           if (accessories.length > 0 && Math.random() > 0.5) {
             outfit.push(accessories[Math.floor(Math.random() * accessories.length)]);
           }
         }
         
       } else {
-        const tops = items.filter((item) => [...MALE_TOPS, ...FEMALE_TOPS].includes(item.category));
-        const bottoms = items.filter((item) => [...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(item.category));
-        const dresses = items.filter((item) => [...FEMALE_DRESSES].includes(item.category));
+        const tops = items.filter((item: ClothingItem) => [...MALE_TOPS, ...FEMALE_TOPS].includes(item.category as any));
+        const bottoms = items.filter((item: ClothingItem) => [...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(item.category as any));
+        const dresses = items.filter((item: ClothingItem) => [...FEMALE_DRESSES].includes(item.category as any));
 
         if (dresses.length > 0 && Math.random() > 0.5) {
           outfit.push(dresses[Math.floor(Math.random() * dresses.length)]);
@@ -169,7 +169,7 @@ export default function StylingScreen() {
           if (bottoms.length > 0) outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
         }
 
-        const shoes = items.filter((item) => [...MALE_SHOES, ...FEMALE_SHOES].includes(item.category));
+        const shoes = items.filter((item: ClothingItem) => [...MALE_SHOES, ...FEMALE_SHOES].includes(item.category as any));
         if (shoes.length > 0) {
           outfit.push(shoes[Math.floor(Math.random() * shoes.length)]);
         }
@@ -200,7 +200,7 @@ export default function StylingScreen() {
     generateOutfitMutation.mutate({
         selectedItemId,
         event: event || 'casual',
-        wardrobeItems: items.map(i => ({ id: i.id, category: i.category, color: i.color }))
+        wardrobeItems: items.map((i: ClothingItem) => ({ id: i.id, category: i.category, color: i.color }))
     });
   };
 
@@ -288,7 +288,7 @@ export default function StylingScreen() {
               )}
 
               <View style={styles.outfitGrid}>
-                {suggestedOutfit.map((item, index) => (
+                {suggestedOutfit.map((item: ClothingItem, index: number) => (
                   <View key={`${item.id}-${index}`} style={styles.outfitItem}>
                     <Image
                       source={{ uri: item.imageUri }}
