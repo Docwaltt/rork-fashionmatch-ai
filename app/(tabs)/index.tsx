@@ -1,39 +1,3 @@
-// Inside the item detail modal's JSX, add these blocks to display the new info.
-// A good place is after the "SEASON" detail and before the "Added" date.
-
-{selectedItem.season && (
-  <View style={styles.detailRow}>
-    <Text style={styles.detailLabel}>SEASON</Text>
-    <Text style={styles.detailValue}>{selectedItem.season}</Text>
-  </View>
-)}
-
-{/* Add these new blocks below */}
-{selectedItem.material && (
-  <View style={styles.detailRow}>
-    <Text style={styles.detailLabel}>MATERIAL</Text>
-    <Text style={styles.detailValue}>{selectedItem.material}</Text>
-  </View>
-)}
-
-{selectedItem.fabric && (
-  <View style={styles.detailRow}>
-    <Text style={styles.detailLabel}>FABRIC</Text>
-    <Text style={styles.detailValue}>{selectedItem.fabric}</Text>
-  </View>
-)}
-
-{selectedItem.pattern && (
-  <View style={styles.detailRow}>
-    <Text style={styles.detailLabel}>PATTERN</Text>
-    <Text style={styles.detailValue}>{selectedItem.pattern}</Text>
-  </View>
-)}
-{/* End of new blocks */}
-
-<Text style={styles.modalDate}>
-  Added {new Date(selectedItem.addedAt).toLocaleDateString()}
-</Text>
 import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import { router } from "expo-router";
@@ -105,13 +69,13 @@ export default function WardrobeScreen() {
     let result = items;
     
     if (activeCategory !== 'all') {
-      result = result.filter(item => item.category === activeCategory);
+      result = result.filter((item: ClothingItem) => item.category === activeCategory);
     }
     
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      result = result.filter(item => {
-        const matchesColor = item.colors?.some(color => 
+      result = result.filter((item: ClothingItem) => {
+        const matchesColor = item.colors?.some((color: string) =>
           color.toLowerCase().includes(query)
         );
         const matchesCategory = item.category.toLowerCase().includes(query);
@@ -179,7 +143,7 @@ export default function WardrobeScreen() {
   };
 
   const getCategoryLabel = (categoryId: string) => {
-    const found = categories.find(c => c.id === categoryId);
+    const found = categories.find((c: { id: string; label: string }) => c.id === categoryId);
     return found?.label || categoryId;
   };
 
@@ -282,7 +246,7 @@ export default function WardrobeScreen() {
                   activeCategory === 'all' && styles.categoryChipTextActive
                 ]}>All</Text>
               </TouchableOpacity>
-              {categories.map((cat) => (
+              {categories.map((cat: { id: ClothingCategory; label: string; icon: string }) => (
                 <TouchableOpacity
                   key={cat.id}
                   style={[
@@ -339,7 +303,7 @@ export default function WardrobeScreen() {
                     <Text style={styles.clearFilterButtonText}>CLEAR FILTERS</Text>
                   </TouchableOpacity>
                 </View>
-              ) : filteredItems.map((item) => (
+              ) : filteredItems.map((item: ClothingItem) => (
                 <TouchableOpacity
                   key={item.id}
                   style={styles.gridItem}
@@ -395,7 +359,7 @@ export default function WardrobeScreen() {
                       <View style={styles.colorsSection}>
                         <Text style={styles.detailLabel}>COLORS</Text>
                         <View style={styles.colorTags}>
-                          {selectedItem.colors.map((color, index) => (
+                          {selectedItem.colors?.map((color: string, index: number) => (
                             <View key={index} style={styles.colorTag}>
                               <Text style={styles.colorTagText}>{color.toUpperCase()}</Text>
                             </View>
@@ -408,6 +372,27 @@ export default function WardrobeScreen() {
                       <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>SEASON</Text>
                         <Text style={styles.detailValue}>{selectedItem.season}</Text>
+                      </View>
+                    )}
+
+                    {selectedItem.material && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>MATERIAL</Text>
+                        <Text style={styles.detailValue}>{selectedItem.material}</Text>
+                      </View>
+                    )}
+
+                    {selectedItem.fabric && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>FABRIC</Text>
+                        <Text style={styles.detailValue}>{selectedItem.fabric}</Text>
+                      </View>
+                    )}
+
+                    {selectedItem.pattern && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>PATTERN</Text>
+                        <Text style={styles.detailValue}>{selectedItem.pattern}</Text>
                       </View>
                     )}
                     
@@ -465,7 +450,7 @@ export default function WardrobeScreen() {
               </Text>
               <ScrollView style={styles.eventList} showsVerticalScrollIndicator={false}>
                 <View style={styles.editCategoryGrid}>
-                  {categories.map((cat) => (
+                  {categories.map((cat: { id: ClothingCategory; label: string; icon: string }) => (
                     <TouchableOpacity
                       key={cat.id}
                       style={[
