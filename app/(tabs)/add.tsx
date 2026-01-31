@@ -15,7 +15,8 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
-  TextInput
+  TextInput,
+  Switch
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -90,12 +91,20 @@ export default function AddItemScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisSuccess, setAnalysisSuccess] = useState<boolean>(false);
+  const [isSavingItem, setIsSavingItem] = useState(false);
   const { addItem } = useWardrobe();
   
   // New state variables for detailed fields
   const [material, setMaterial] = useState('');
   const [fabric, setFabric] = useState('');
   const [pattern, setPattern] = useState('');
+  const [designPattern, setDesignPattern] = useState('');
+  const [style, setStyle] = useState('');
+  const [texture, setTexture] = useState('');
+  const [silhouette, setSilhouette] = useState('');
+  const [patternDescription, setPatternDescription] = useState('');
+  const [materialType, setMaterialType] = useState('');
+  const [hasPattern, setHasPattern] = useState<boolean>(false);
 
   const analyzeImageMutation = trpc.wardrobe.analyze.useMutation({
     onSuccess: (data: any) => {
@@ -120,6 +129,13 @@ export default function AddItemScreen() {
       if (data.material) setMaterial(String(data.material));
       if (data.fabric) setFabric(data.fabric);
       if (data.pattern) setPattern(String(data.pattern));
+      if (data.designPattern) setDesignPattern(data.designPattern);
+      if (data.style) setStyle(data.style);
+      if (data.texture) setTexture(data.texture);
+      if (data.silhouette) setSilhouette(data.silhouette);
+      if (data.patternDescription) setPatternDescription(data.patternDescription);
+      if (data.materialType) setMaterialType(data.materialType);
+      if (data.hasPattern !== undefined) setHasPattern(!!data.hasPattern);
 
       if (data.category) {
         const validCategories = categories.map(c => c.id);
@@ -273,8 +289,9 @@ export default function AddItemScreen() {
     }
   };
 
-  const handleSaveItem = () => {
+  const handleSaveItem = async () => {
     if (!processedImage || !selectedCategory) return;
+    setIsSavingItem(true);
 
     const newItem = {
       id: Date.now().toString(),
@@ -283,26 +300,40 @@ export default function AddItemScreen() {
       colors: detectedColors,
       addedAt: Date.now(),
       color: detectedColors[0] || 'unknown',
-      style: 'casual', 
+      style: style || 'casual',
       confidence: 1.0,
       
       // Include new fields
       material,
       fabric,
       pattern,
+      designPattern,
+      texture,
+      silhouette,
+      patternDescription,
+      materialType,
+      hasPattern,
     };
 
-    addItem(newItem);
-    
-    Alert.alert(
-      "Added!",
-      "Item has been added to your wardrobe.",
-      [{ text: "OK", onPress: handleReset }]
-    );
+    try {
+      await addItem(newItem);
+
+      Alert.alert(
+        "Added!",
+        "Item has been added to your wardrobe.",
+        [{ text: "OK", onPress: handleReset }]
+      );
+    } catch (error) {
+      console.error("[AddItem] Save error:", error);
+      Alert.alert("Save Error", "Failed to save item to wardrobe.");
+    } finally {
+      setIsSavingItem(false);
+    }
   };
 
-  const handleStyleMe = () => {
+  const handleStyleMe = async () => {
     if (!processedImage || !selectedCategory) return;
+    setIsSavingItem(true);
 
     const newItem = {
       id: Date.now().toString(),
@@ -311,27 +342,40 @@ export default function AddItemScreen() {
       colors: detectedColors,
       addedAt: Date.now(),
       color: detectedColors[0] || 'unknown',
-      style: 'casual', 
+      style: style || 'casual',
       confidence: 1.0,
       
       // Include new fields
       material,
       fabric,
       pattern,
+      designPattern,
+      texture,
+      silhouette,
+      patternDescription,
+      materialType,
+      hasPattern,
     };
 
-    addItem(newItem);
-    
-    // Navigate to styling screen with the new item
-    router.push({
-      pathname: '/styling',
-      params: { 
-        itemId: newItem.id,
-        fromAdd: 'true'
-      }
-    });
-    
-    handleReset();
+    try {
+      await addItem(newItem);
+
+      // Navigate to styling screen with the new item
+      router.push({
+        pathname: '/styling',
+        params: {
+          itemId: newItem.id,
+          fromAdd: 'true'
+        }
+      });
+
+      handleReset();
+    } catch (error) {
+      console.error("[AddItem] Style Me save error:", error);
+      Alert.alert("Error", "Failed to save item before styling.");
+    } finally {
+      setIsSavingItem(false);
+    }
   };
 
   const handleReset = () => {
@@ -345,6 +389,13 @@ export default function AddItemScreen() {
     setMaterial('');
     setFabric('');
     setPattern('');
+    setDesignPattern('');
+    setStyle('');
+    setTexture('');
+    setSilhouette('');
+    setPatternDescription('');
+    setMaterialType('');
+    setHasPattern(false);
   };
 
   if (showCamera) {
@@ -503,6 +554,62 @@ export default function AddItemScreen() {
                   placeholder="e.g., Solid, Striped, Plaid"
                   placeholderTextColor={Colors.gray[600]}
                 />
+
+                <Text style={styles.label}>STYLE</Text>
+                <TextInput
+                  style={styles.input}
+                  value={style}
+                  onChangeText={setStyle}
+                  placeholder="e.g., Casual, Formal, Streetwear"
+                  placeholderTextColor={Colors.gray[600]}
+                />
+
+                <Text style={styles.label}>TEXTURE</Text>
+                <TextInput
+                  style={styles.input}
+                  value={texture}
+                  onChangeText={setTexture}
+                  placeholder="e.g., Smooth, Ribbed, Fuzzy"
+                  placeholderTextColor={Colors.gray[600]}
+                />
+
+                <Text style={styles.label}>SILHOUETTE</Text>
+                <TextInput
+                  style={styles.input}
+                  value={silhouette}
+                  onChangeText={setSilhouette}
+                  placeholder="e.g., Slim, Oversized, A-line"
+                  placeholderTextColor={Colors.gray[600]}
+                />
+
+                <Text style={styles.label}>PATTERN DESCRIPTION</Text>
+                <TextInput
+                  style={[styles.input, { minHeight: 60, textAlignVertical: 'top' }]}
+                  value={patternDescription}
+                  onChangeText={setPatternDescription}
+                  placeholder="e.g., Small white polka dots on blue"
+                  placeholderTextColor={Colors.gray[600]}
+                  multiline
+                />
+
+                <Text style={styles.label}>MATERIAL TYPE</Text>
+                <TextInput
+                  style={styles.input}
+                  value={materialType}
+                  onChangeText={setMaterialType}
+                  placeholder="e.g., Synthetic, Natural"
+                  placeholderTextColor={Colors.gray[600]}
+                />
+
+                <View style={styles.switchRow}>
+                  <Text style={[styles.label, { marginBottom: 0 }]}>HAS PATTERN?</Text>
+                  <Switch
+                    value={hasPattern}
+                    onValueChange={setHasPattern}
+                    trackColor={{ false: Colors.gray[100], true: Colors.gold[400] }}
+                    thumbColor={Platform.OS === 'ios' ? undefined : (hasPattern ? Colors.white : Colors.gray[500])}
+                  />
+                </View>
               </View>
               
               <Text style={styles.sectionTitle}>CATEGORY</Text>
@@ -530,31 +637,39 @@ export default function AddItemScreen() {
               <TouchableOpacity
                 style={[
                   styles.styleButton,
-                  (!processedImage || !selectedCategory || isProcessing) && styles.saveButtonDisabled
+                  (!processedImage || !selectedCategory || isProcessing || isSavingItem) && styles.saveButtonDisabled
                 ]}
                 onPress={handleStyleMe}
-                disabled={!processedImage || !selectedCategory || isProcessing}
+                disabled={!processedImage || !selectedCategory || isProcessing || isSavingItem}
               >
                 <LinearGradient
-                  colors={(!processedImage || !selectedCategory || isProcessing) 
+                  colors={(!processedImage || !selectedCategory || isProcessing || isSavingItem)
                     ? [Colors.gray[200], Colors.gray[200]] 
                     : [Colors.gold[300], Colors.gold[500]]}
                   style={styles.saveButtonGradient}
                 >
-                  <Text style={styles.saveButtonText}>✨ STYLE ME</Text>
+                  {isSavingItem ? (
+                    <ActivityIndicator color={Colors.richBlack} size="small" />
+                  ) : (
+                    <Text style={styles.saveButtonText}>✨ STYLE ME</Text>
+                  )}
                 </LinearGradient>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
                   styles.saveButton,
-                  (!processedImage || !selectedCategory || isProcessing) && styles.saveButtonDisabled
+                  (!processedImage || !selectedCategory || isProcessing || isSavingItem) && styles.saveButtonDisabled
                 ]}
                 onPress={handleSaveItem}
-                disabled={!processedImage || !selectedCategory || isProcessing}
+                disabled={!processedImage || !selectedCategory || isProcessing || isSavingItem}
               >
                 <View style={styles.saveButtonOutline}>
-                  <Text style={styles.saveButtonOutlineText}>SAVE TO WARDROBE</Text>
+                  {isSavingItem ? (
+                    <ActivityIndicator color={Colors.gold[400]} size="small" />
+                  ) : (
+                    <Text style={styles.saveButtonOutlineText}>SAVE TO WARDROBE</Text>
+                  )}
                 </View>
               </TouchableOpacity>
             </View>
@@ -901,5 +1016,11 @@ const styles = StyleSheet.create({
     color: Colors.white,
     padding: 12,
     fontSize: 14,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
   },
 });

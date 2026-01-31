@@ -253,8 +253,13 @@ export const wardrobeRouter = createTRPCRouter({
           material: data.material as ClothingMaterial,
           patternDescription: data.patternDescription || "",
           cleanedImageUrl: data.cleanedImageUrl,
-          // Fabric might come back from analysis?
           fabric: data.fabric || "",
+          designPattern: data.designPattern || "",
+          style: data.style || "",
+          texture: data.texture || "",
+          silhouette: data.silhouette || "",
+          materialType: data.materialType || "",
+          hasPattern: !!data.hasPattern,
         };
 
         console.log("[Wardrobe] Analysis successful, returning data:", result);
