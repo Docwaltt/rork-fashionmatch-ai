@@ -31,14 +31,20 @@ export const wardrobeRouter = createTRPCRouter({
 
       const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
       console.log("[Wardrobe] Base64 data length (stripped):", base64Data?.length);
+      console.log("[Wardrobe] Base64 start:", base64Data?.substring(0, 50));
 
       const requestBody = {
         image: base64Data,
         gender: gender,
         validCategories: categoryIds,
+        // Multiple naming conventions for background removal
         removeBackground: true,
+        remove_background: true,
+        background_removal: true,
         includeCleanedImage: true,
         includeSegmentation: true,
+        cleaned: true,
+        background: "remove",
       };
       console.log("[Wardrobe] Request body keys:", Object.keys(requestBody));
       console.log("[Wardrobe] Request payload size:", JSON.stringify(requestBody).length, "bytes");
@@ -184,7 +190,7 @@ export const wardrobeRouter = createTRPCRouter({
         const possibleImageFields = [
           'cleanedImage', 'processedImage', 'backgroundRemovedImage',
           'segmentationImage', 'cleanedImageUrl', 'image', 'resultImage',
-          'outputImage', 'no_bg_image', 'nobg'
+          'outputImage', 'no_bg_image', 'nobg', 'cleaned_image', 'background_removed'
         ];
         
         for (const field of possibleImageFields) {
@@ -321,5 +327,76 @@ export const wardrobeRouter = createTRPCRouter({
       }
       
       throw new Error(lastError?.message || "Failed to analyze image. Please try again.");
+    }),
+
+  suggestOutfit: publicProcedure
+    .input(z.object({
+      items: z.array(z.any()),
+      event: z.string().optional(),
+      gender: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const { items, event, gender } = input;
+      console.log(`[Wardrobe] Generating outfit for event: ${event}, items: ${items.length}`);
+
+      if (items.length === 0) {
+        throw new Error("Your wardrobe is empty. Add some clothes first!");
+      }
+
+      // Group items by category
+      const tops = items.filter((item) => item.category === "top" || item.category === "shirt" || item.category === "t-shirt");
+      const bottoms = items.filter((item) => item.category === "bottom" || item.category === "trousers" || item.category === "jeans" || item.category === "shorts");
+      const dresses = items.filter((item) => item.category === "dress" || item.category === "gown");
+      const outerwear = items.filter((item) => item.category === "outerwear" || item.category === "jacket" || item.category === "coat");
+      const shoes = items.filter((item) => item.category === "shoes" || item.category === "sneakers" || item.category === "boots");
+      const accessories = items.filter((item) => item.category === "accessories" || item.category === "bag" || item.category === "jewelry");
+
+      const suggestion: any[] = [];
+
+      // Logic for different events
+      const isFormal = event === 'formal' || event === 'business';
+      const isWorkout = event === 'workout';
+
+      // 1. Core piece (Dress or Top+Bottom)
+      if (dresses.length > 0 && (gender === 'female' || Math.random() > 0.7) && !isWorkout) {
+        // Suggested dress
+        suggestion.push(dresses[Math.floor(Math.random() * dresses.length)]);
+      } else {
+        // Suggested Top + Bottom
+        if (tops.length > 0) {
+          suggestion.push(tops[Math.floor(Math.random() * tops.length)]);
+        }
+        if (bottoms.length > 0) {
+          suggestion.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
+        }
+      }
+
+      // 2. Outerwear (Conditional)
+      if (outerwear.length > 0) {
+        const needsOuterwear = isFormal || Math.random() > 0.5;
+        if (needsOuterwear) {
+          suggestion.push(outerwear[Math.floor(Math.random() * outerwear.length)]);
+        }
+      }
+
+      // 3. Shoes
+      if (shoes.length > 0) {
+        suggestion.push(shoes[Math.floor(Math.random() * shoes.length)]);
+      }
+
+      // 4. Accessories
+      if (accessories.length > 0 && Math.random() > 0.4) {
+        suggestion.push(accessories[Math.floor(Math.random() * accessories.length)]);
+      }
+
+      // Ensure we have at least something
+      if (suggestion.length === 0) {
+        suggestion.push(items[Math.floor(Math.random() * items.length)]);
+      }
+
+      return {
+        suggestion,
+        reasoning: `Selected based on the ${event} theme and your available collection.`,
+      };
     }),
 });

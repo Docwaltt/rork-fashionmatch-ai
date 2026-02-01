@@ -13,8 +13,10 @@ import {
   Platform
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useMutation } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/contexts/AuthContext";
+import { Alert } from "react-native";
 
 import Colors from "@/constants/colors";
 import { useWardrobe } from "@/contexts/WardrobeContext";
@@ -32,58 +34,32 @@ const EVENT_LABELS: Record<string, string> = {
 export default function StylingScreen() {
   const { event } = useLocalSearchParams<{ event: string }>();
   const { items } = useWardrobe();
+  const { userProfile } = useAuth();
   const [suggestedOutfit, setSuggestedOutfit] = useState<ClothingItem[]>([]);
+  const [reasoning, setReasoning] = useState<string | null>(null);
 
-  const generateOutfitMutation = useMutation({
-    mutationFn: async () => {
-      // Simulate AI processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      if (items.length === 0) {
-        throw new Error("No items in wardrobe");
-      }
-
-      const tops = items.filter((item) => item.category === "top");
-      const bottoms = items.filter((item) => item.category === "bottom");
-      const dresses = items.filter((item) => item.category === "dress");
-
-      const outfit: ClothingItem[] = [];
-
-      if (dresses.length > 0 && Math.random() > 0.5) {
-        outfit.push(dresses[Math.floor(Math.random() * dresses.length)]);
-      } else {
-        if (tops.length > 0) {
-          outfit.push(tops[Math.floor(Math.random() * tops.length)]);
-        }
-        if (bottoms.length > 0) {
-          outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
-        }
-      }
-
-      const outerwear = items.filter((item) => item.category === "outerwear");
-      if (outerwear.length > 0 && Math.random() > 0.6) {
-        outfit.push(outerwear[Math.floor(Math.random() * outerwear.length)]);
-      }
-
-      const shoes = items.filter((item) => item.category === "shoes");
-      if (shoes.length > 0) {
-        outfit.push(shoes[Math.floor(Math.random() * shoes.length)]);
-      }
-
-      const accessories = items.filter((item) => item.category === "accessories");
-      if (accessories.length > 0 && Math.random() > 0.5) {
-        outfit.push(accessories[Math.floor(Math.random() * accessories.length)]);
-      }
-
-      return outfit;
+  const generateOutfitMutation = trpc.wardrobe.suggestOutfit.useMutation({
+    onSuccess: (data) => {
+      setSuggestedOutfit(data.suggestion);
+      setReasoning(data.reasoning);
     },
-    onSuccess: (outfit) => {
-      setSuggestedOutfit(outfit);
-    },
+    onError: (error) => {
+      console.error("[Styling] Error generating outfit:", error);
+      Alert.alert("Styling Error", error.message || "Failed to generate outfit suggestion.");
+    }
   });
 
   const handleGenerateOutfit = () => {
-    generateOutfitMutation.mutate();
+    if (items.length === 0) {
+      Alert.alert("Empty Wardrobe", "Please add some items to your wardrobe first.");
+      return;
+    }
+
+    generateOutfitMutation.mutate({
+      items: items,
+      event: event || 'casual',
+      gender: userProfile?.gender
+    });
   };
 
   return (
@@ -154,6 +130,10 @@ export default function StylingScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {reasoning && (
+                <Text style={styles.reasoningText}>{reasoning}</Text>
+              )}
 
               <View style={styles.outfitGrid}>
                 {suggestedOutfit.map((item, index) => (
@@ -303,6 +283,14 @@ const styles = StyleSheet.create({
     color: Colors.gray[500],
     letterSpacing: 2,
     fontWeight: "600",
+  },
+  reasoningText: {
+    fontSize: 14,
+    color: Colors.white,
+    fontStyle: 'italic',
+    marginBottom: 20,
+    lineHeight: 20,
+    opacity: 0.8,
   },
   outfitActions: {
     flexDirection: 'row',

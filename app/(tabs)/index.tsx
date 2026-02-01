@@ -266,6 +266,20 @@ export default function WardrobeScreen() {
                       </View>
                     )}
                     
+                    {selectedItem.texture && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>TEXTURE</Text>
+                        <Text style={styles.detailValue}>{selectedItem.texture}</Text>
+                      </View>
+                    )}
+
+                    {selectedItem.designPattern && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>DESIGN</Text>
+                        <Text style={styles.detailValue}>{selectedItem.designPattern}</Text>
+                      </View>
+                    )}
+
                     {selectedItem.season && (
                       <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>SEASON</Text>

@@ -94,6 +94,10 @@ export default function AddItemScreen() {
 
   const analyzeImageMutation = trpc.wardrobe.analyzeImage.useMutation({
     onSuccess: (data) => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
       console.log("[AddItem] Processing successful. Response data:", {
         category: data.category,
         color: data.color,
@@ -150,11 +154,17 @@ export default function AddItemScreen() {
       setIsProcessing(false);
     },
     onError: (error: any) => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
       console.error("[AddItem] Processing error:", error.message);
       setIsProcessing(false);
       setAnalysisError(error.message || "AI analysis failed. Please select manually.");
     },
   });
+
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleProcessImage = async (imageUri: string) => {
     setIsProcessing(true);
@@ -162,11 +172,11 @@ export default function AddItemScreen() {
     setProcessedImage(imageUri); // Use original image as fallback
     
     // Safety timeout to allow manual selection if AI is too slow
-    const timeoutId = setTimeout(() => {
-      if (isProcessing) {
-        setIsProcessing(false);
-        console.log("[AddItem] Analysis timeout, allowing manual selection");
-      }
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      setIsProcessing(false);
+      timeoutRef.current = null;
+      console.log("[AddItem] Analysis timeout, allowing manual selection");
     }, 60000);
 
     try {
@@ -190,7 +200,10 @@ export default function AddItemScreen() {
       console.error("[AddItem] Error preparing image:", error);
       setAnalysisError("Failed to prepare image for analysis.");
       setIsProcessing(false);
-      clearTimeout(timeoutId);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
     }
   };
 
@@ -258,6 +271,8 @@ export default function AddItemScreen() {
       imageUri: processedImage,
       category: selectedCategory,
       colors: detectedColors,
+      texture: detectedTexture || undefined,
+      designPattern: detectedDesign || undefined,
       addedAt: Date.now(),
     };
 
@@ -278,6 +293,8 @@ export default function AddItemScreen() {
       imageUri: processedImage,
       category: selectedCategory,
       colors: detectedColors,
+      texture: detectedTexture || undefined,
+      designPattern: detectedDesign || undefined,
       addedAt: Date.now(),
     };
 

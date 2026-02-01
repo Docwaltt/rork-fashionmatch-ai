@@ -8,6 +8,8 @@ export type ClothingItem = {
   imageUri: string;
   category: ClothingCategory;
   colors: string[];
+  texture?: string;
+  designPattern?: string;
   season?: string;
   addedAt: number;
   name?: string;
