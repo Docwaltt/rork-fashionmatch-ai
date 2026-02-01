@@ -279,7 +279,8 @@ export const wardrobeRouter = createTRPCRouter({
       try {
         const functions = getFunctions();
         const generateOutfits = httpsCallable(functions, 'generateOutfitsFn');
-        const result = await generateOutfits({ wardrobe: input.wardrobe });
+        // Correctly passing the array as the data payload, not wrapping it in an object
+        const result = await generateOutfits(input.wardrobe);
         return result.data;
       } catch (error) {
         console.error("Error generating outfits:", error);
