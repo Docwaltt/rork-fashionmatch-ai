@@ -1,5 +1,8 @@
 import { createTRPCRouter, publicProcedure } from "../create-context";
 import { z } from "zod";
+import { GoogleAuth } from 'google-auth-library';
+
+const auth = new GoogleAuth();
 
 // Mocking prisma since it's missing in the environment but required for compilation of this file.
 // In a real scenario, we would fix the path or generate the client.
@@ -38,30 +41,27 @@ const LocalClothingSchema = z.object({
 
 const callFirebaseFunction = async (functionName: string, data: any) => {
   const projectId =
-    process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "dressya-6ff56";
+    process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "closet-app-1337";
   const region = "us-central1";
-  const url = `https://${region}-${projectId}.cloudfunctions.net/${functionName}`;
 
-  console.log(`[Wardrobe] Calling Firebase function: ${url}`);
+  let url = `https://${region}-${projectId}.cloudfunctions.net/${functionName}`;
+
+  // Use specific URL for analysis if it's the analysis function as indicated in memory
+  if (functionName === "analyzeImage" || functionName === "analyze") {
+      url = "https://processclothingfn-pfc64ufnsq-uc.a.run.app";
+  }
+
+  console.log(`[Wardrobe] Calling function: ${url}`);
 
   try {
-    const response = await fetch(url, {
+    const client = await auth.getIdTokenClient(url);
+    const response = await client.request({
+      url,
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ data }),
+      data: { data },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(
-        `[Wardrobe] Firebase function ${functionName} returned an error: ${response.status} ${errorText}`
-      );
-      throw new Error(
-        `Firebase function failed with status: ${response.status}`
-      );
-    }
-
-    const json = await response.json();
+    const json = response.data as any;
     console.log(`[Wardrobe] Received response from ${functionName}:`, json);
 
     // Callable functions wrap result in 'result' field.
@@ -76,7 +76,7 @@ const callFirebaseFunction = async (functionName: string, data: any) => {
     return result !== undefined ? result : json;
   } catch (error) {
     console.error(
-      `[Wardrobe] Error calling Firebase function ${functionName}:`,
+      `[Wardrobe] Error calling function ${functionName}:`,
       error
     );
     throw error;
