@@ -10,6 +10,7 @@ if (!apiKey) {
 }
 
 export const ClothingSchema = z.object({
+  id: z.string().optional().describe('Unique ID for the clothing item'),
   category: z.string().describe('Type of item (e.g., Denim Jacket, T-Shirt, Jeans)'),
   color: z.string().describe('Primary color detected'),
   style: z.string().describe('Fashion style (e.g., Casual, Formal, Vintage, Streetwear)'),
@@ -196,5 +197,53 @@ export const processClothing = ai.defineFlow(
         cleanedImage: cleanedImageBase64 
       };
     }
+  }
+);
+
+export const OutfitSuggestionSchema = z.object({
+  title: z.string().describe('A catchy title for the outfit suggestion.'),
+  description: z.string().describe('A brief description of the outfit and why it works.'),
+  items: z.array(z.string()).describe('An array of item IDs that make up the outfit.'),
+});
+
+
+export const generateOutfits = ai.defineFlow(
+  {
+    name: 'generateOutfits',
+    inputSchema: z.array(ClothingSchema),
+    outputSchema: z.array(OutfitSuggestionSchema),
+  },
+  async (wardrobe) => {
+    if (wardrobe.length < 2) {
+      return [{
+        title: "Need More Clothes!",
+        description: "Add more items to your wardrobe to get outfit suggestions.",
+        items: [],
+      }];
+    }
+
+    const response = await ai.generate({
+      prompt: [
+        {
+          text: `
+            You are a world-class fashion stylist. Your task is to create 3-5 stylish outfits from the user's wardrobe.
+
+            **Instructions:**
+            1.  **Analyze the Wardrobe:** Carefully review the list of available clothing items, paying attention to category, color, style, and pattern.
+            2.  **Search for Inspiration:** Use your knowledge of current fashion trends to generate stylish and coherent outfits. You can use Google Search to find up-to-date information on what's in style.
+            3.  **Create Outfits:** Combine the items into complete outfits. Each outfit should have a top, a bottom, and optionally, shoes and accessories if they are available in the wardrobe.
+            4.  **Provide a Title and Description:** For each outfit, create a catchy title and a brief description that explains the style and occasion for the outfit.
+            5.  **Return the Outfit:** Return a list of outfit suggestions, each with a title, description, and the IDs of the items that make up the outfit.
+
+            **Wardrobe:**
+            ${JSON.stringify(wardrobe, null, 2)}
+          `,
+        },
+      ],
+      output: { schema: z.array(OutfitSuggestionSchema) },
+      tools: [googleAI.search()],
+    });
+
+    return response.output || [];
   }
 );

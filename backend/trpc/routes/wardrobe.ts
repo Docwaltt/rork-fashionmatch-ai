@@ -1,5 +1,7 @@
 import { createTRPCRouter, publicProcedure } from "../create-context";
 import { z } from "zod";
+import { ClothingSchema, generateOutfits } from "../../../functions/src/genkit";
+
 // Mocking prisma since it's missing in the environment but required for compilation of this file.
 // In a real scenario, we would fix the path or generate the client.
 const prisma = {
@@ -277,22 +279,19 @@ export const wardrobeRouter = createTRPCRouter({
     generateOutfit: publicProcedure
     .input(
       z.object({
-        selectedItemId: z.string().optional(),
-        event: z.string(),
-        wardrobeItems: z.array(
-          z.object({
-            id: z.string(),
-            category: z.string(), // Allowing string to be flexible
-            color: z.string(),
-          })
-        ),
+        wardrobe: z.array(ClothingSchema),
       })
     )
     .mutation(async ({ input }) => {
-        // Placeholder implementation
-        return {
-            reasoning: "Here is a suggested outfit based on your wardrobe.",
-            items: []
-        }
+      try {
+        const outfits = await generateOutfits.run(input.wardrobe);
+        return outfits;
+      } catch (error) {
+        console.error("Error generating outfits:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to generate outfits.",
+        });
+      }
     }),
 });

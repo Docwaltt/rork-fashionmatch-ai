@@ -1,7 +1,7 @@
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { Sparkles, ArrowLeft, RefreshCw, Share2 } from "lucide-react-native";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -29,178 +29,68 @@ const EVENT_LABELS: Record<string, string> = {
   workout: "Workout",
 };
 
-const generateReasoningString = (outfit: ClothingItem[], baseItem: ClothingItem | null | undefined, eventType: string): string => {
-  if (outfit.length === 0) {
-    return "No outfit could be generated.";
-  }
-
-  let reasoning = "";
-  const top = outfit.find(i => ['top', 't-shirt', 'shirt', 'blouse'].includes(i.category));
-  const bottom = outfit.find(i => ['bottom', 'pants', 'jeans', 'shorts', 'skirt', 'trousers'].includes(i.category));
-  const dress = outfit.find(i => ['dress', 'gown', 'jumpsuit'].includes(i.category));
-  const shoes = outfit.find(i => ['shoes', 'sneakers', 'heels', 'boots', 'sandals', 'flats'].includes(i.category));
-  const outerwear = outfit.find(i => ['outerwear', 'jacket', 'coat', 'cardigan'].includes(i.category));
-  const accessory = outfit.find(i => ['accessories', 'bag', 'jewelry'].includes(i.category));
-
-  if (baseItem) {
-    reasoning += `Building around your selected ${baseItem.category}, `;
-  }
-
-  if (dress) {
-    reasoning += `the ${dress.color || ''} ${dress.category} is a perfect standalone piece for a ${eventType} event. `;
-    if (shoes) {
-      reasoning += `We've paired it with ${shoes.category} to complement the look. `;
-    }
-  } else if (top && bottom) {
-    reasoning += `we've paired the ${top.color || ''} ${top.category} with ${bottom.color || ''} ${bottom.category}. `;
-    const combinationReason = "This creates a classic, versatile palette. ";
-    // More complex logic could be added here to evaluate color harmony
-    reasoning += combinationReason;
-    if (shoes) {
-        reasoning += `The ${shoes.category} tie the outfit together. `
-    }
-  } else if (top) {
-      reasoning += `we started with the ${top.color || ''} ${top.category} as a base. `
-  } else if (bottom) {
-      reasoning += `we started with the ${bottom.color || ''} ${bottom.category} as a base. `
-  }
-
-
-  if (outerwear) {
-    reasoning += `The ${outerwear.category} adds a layer of sophistication and warmth. `;
-  }
-  if (accessory) {
-    reasoning += `Finally, the ${accessory.category} provides a stylish finishing touch.`;
-  }
-
-  // Fallback if no specific reasoning could be generated
-  if (reasoning.trim().length < 10) {
-      return `This outfit is curated for a ${eventType} setting, balancing style and comfort with pieces from your wardrobe.`;
-  }
-
-  return reasoning.trim();
-};
-
 export default function StylingScreen() {
-  const { event, selectedItemId } = useLocalSearchParams<{ event: string; selectedItemId?: string }>();
+  const { event, selectedItemId, selectedItemIds } = useLocalSearchParams<{ event: string; selectedItemId?: string; selectedItemIds?: string }>();
   const { items } = useWardrobe();
   const [suggestedOutfit, setSuggestedOutfit] = useState<ClothingItem[]>([]);
   const [reasoning, setReasoning] = useState<string | null>(null);
   
   const selectedItem = selectedItemId ? items.find(item => item.id === selectedItemId) : undefined;
+  const multipleSelectedItems = selectedItemIds ? selectedItemIds.split(',').map(id => items.find(i => i.id === id)).filter(Boolean) as ClothingItem[] : [];
 
   const generateOutfitMutation = trpc.wardrobe.generateOutfit.useMutation({
-     onSuccess: (data: { reasoning: string }) => {
-        // Backend provides a generic reasoning, but we generate a specific one on the client
-        // after the outfit is assembled.
-        generateSmartOutfit(data.reasoning); // Pass backend reasoning as a base
+     onSuccess: (data) => {
+        if (data && data.length > 0) {
+          const firstOutfit = data[0];
+          setReasoning(firstOutfit.description);
+          const outfitItems = firstOutfit.items.map(itemId => items.find(item => item.id === itemId)).filter(Boolean) as ClothingItem[];
+          setSuggestedOutfit(outfitItems);
+        }
      },
      onError: (error: any) => {
          console.error("Failed to generate outfit via API:", error);
-         // Fallback to client-side logic
-         generateSmartOutfit();
      }
   });
 
-  const generateSmartOutfit = (baseReasoning?: string) => {
-      if (items.length === 0) return;
+  // Automatically trigger generation if multiple items are selected via the selection screen
+  useEffect(() => {
+    if (multipleSelectedItems.length > 0 && suggestedOutfit.length === 0 && !generateOutfitMutation.isPending && !generateOutfitMutation.data) {
+        handleGenerateOutfit();
+    }
+  }, [multipleSelectedItems.length]);
 
-      const outfit: ClothingItem[] = [];
-      
-      if (selectedItem) {
-        outfit.push(selectedItem);
-        
-        const otherItems = items.filter(item => item.id !== selectedItem.id);
-        const selectedCategory = selectedItem.category;
-        
-        if ([...MALE_TOPS, ...FEMALE_TOPS].includes(selectedCategory)) {
-          const bottoms = otherItems.filter(item => [...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(item.category));
-          if (bottoms.length > 0) {
-            outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
-          }
-        } else if ([...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(selectedCategory)) {
-          const tops = otherItems.filter(item => [...MALE_TOPS, ...FEMALE_TOPS].includes(item.category));
-          if (tops.length > 0) {
-            outfit.push(tops[Math.floor(Math.random() * tops.length)]);
-          }
-        } else if ([...FEMALE_DRESSES].includes(selectedCategory)) {
-          // Dress is a full outfit
-        } else if ([...MALE_SHOES, ...FEMALE_SHOES].includes(selectedCategory)) {
-          const tops = otherItems.filter(item => [...MALE_TOPS, ...FEMALE_TOPS].includes(item.category));
-          const bottoms = otherItems.filter(item => [...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(item.category));
-          const dresses = otherItems.filter(item => [...FEMALE_DRESSES].includes(item.category));
-          
-          if (dresses.length > 0 && Math.random() > 0.5) {
-            outfit.push(dresses[Math.floor(Math.random() * dresses.length)]);
-          } else {
-            if (tops.length > 0) outfit.push(tops[Math.floor(Math.random() * tops.length)]);
-            if (bottoms.length > 0) outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
-          }
-        } else {
-          const tops = otherItems.filter(item => [...MALE_TOPS, ...FEMALE_TOPS].includes(item.category));
-          const bottoms = otherItems.filter(item => [...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(item.category));
-          if (tops.length > 0) outfit.push(tops[Math.floor(Math.random() * tops.length)]);
-          if (bottoms.length > 0) outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
-        }
-        
-        if (![...MALE_SHOES, ...FEMALE_SHOES].includes(selectedCategory)) {
-          const shoes = otherItems.filter(item => [...MALE_SHOES, ...FEMALE_SHOES].includes(item.category));
-          if (shoes.length > 0) {
-            outfit.push(shoes[Math.floor(Math.random() * shoes.length)]);
-          }
-        }
-        
-        if (![...MALE_ACCESSORIES, ...FEMALE_ACCESSORIES].includes(selectedCategory)) {
-          const accessories = otherItems.filter(item => [...MALE_ACCESSORIES, ...FEMALE_ACCESSORIES].includes(item.category));
-          if (accessories.length > 0 && Math.random() > 0.5) {
-            outfit.push(accessories[Math.floor(Math.random() * accessories.length)]);
-          }
-        }
-        
-      } else {
-        const tops = items.filter((item) => [...MALE_TOPS, ...FEMALE_TOPS].includes(item.category));
-        const bottoms = items.filter((item) => [...MALE_BOTTOMS, ...FEMALE_BOTTOMS].includes(item.category));
-        const dresses = items.filter((item) => [...FEMALE_DRESSES].includes(item.category));
-
-        if (dresses.length > 0 && Math.random() > 0.5) {
-          outfit.push(dresses[Math.floor(Math.random() * dresses.length)]);
-        } else {
-          if (tops.length > 0) outfit.push(tops[Math.floor(Math.random() * tops.length)]);
-          if (bottoms.length > 0) outfit.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
-        }
-
-        const shoes = items.filter((item) => [...MALE_SHOES, ...FEMALE_SHOES].includes(item.category));
-        if (shoes.length > 0) {
-          outfit.push(shoes[Math.floor(Math.random() * shoes.length)]);
-        }
-      }
-      
-      const orderedOutfit = outfit.sort((a, b) => {
-        const order = {
-          'outerwear': 1, 'jacket': 1, 'coat': 1, 'cardigan': 1,
-          'dress': 2, 'gown': 2, 'jumpsuit': 2, 'top': 2, 'shirt': 2, 't-shirt': 2, 'blouse': 2,
-          'bottom': 3, 'pants': 3, 'jeans': 3, 'shorts': 3, 'skirt': 3, 'trousers': 3,
-          'shoes': 4, 'sneakers': 4, 'heels': 4, 'boots': 4, 'sandals': 4, 'flats': 4,
-          'accessories': 5, 'bag': 5, 'jewelry': 5, 'tie': 5
-        };
-        
-        const orderA = order[a.category as keyof typeof order] || 99;
-        const orderB = order[b.category as keyof typeof order] || 99;
-        
-        return orderA - orderB;
-      });
-
-      setSuggestedOutfit(orderedOutfit);
-      
-      const specificReasoning = generateReasoningString(orderedOutfit, selectedItem, event || 'casual');
-      setReasoning(specificReasoning);
-  }
 
   const handleGenerateOutfit = () => {
+    // If specific items were selected, we might want to prioritize them or ONLY use them.
+    // For now, let's pass the whole wardrobe but maybe the prompt could be adjusted to prioritize selected items?
+    // The current backend prompt takes the whole wardrobe and makes outfits.
+    // If we want to force usage of selected items, we should filter the wardrobe passed to the AI?
+    // OR we pass the whole wardrobe and let AI decide, but maybe that ignores the user's selection.
+    
+    // If the user manually selected items, let's pass ONLY those items + maybe some essentials?
+    // Actually, if they selected items, they probably want an outfit made FROM those items or WITH those items.
+    // If we only pass those, the AI is limited.
+    // Let's stick to passing the full wardrobe for now, as the current backend logic is "create outfits from wardrobe".
+    // Wait, if I selected a shirt and pants, I want to know if they go together.
+    
+    // Given the prompt "style the user based on the option of the clothing picked",
+    // if `selectedItemIds` is present, let's filter the input wardrobe to ONLY those items if there are enough (e.g. > 1),
+    // OR if it's just one item (via `selectedItemId`), we pass the whole wardrobe to find matches.
+    
+    let wardrobeToUse = items;
+    
+    if (multipleSelectedItems.length > 1) {
+        wardrobeToUse = multipleSelectedItems;
+    }
+
     generateOutfitMutation.mutate({
-        selectedItemId,
-        event: event || 'casual',
-        wardrobeItems: items.map(i => ({ id: i.id, category: i.category, color: i.color }))
+      wardrobe: wardrobeToUse.map(item => ({
+        ...item,
+        // Ensure all required fields for ClothingSchema are present
+        style: item.style || "casual",
+        confidence: item.confidence || 0.9,
+        isBackgroundRemoved: item.isBackgroundRemoved || false,
+      })),
     });
   };
 
@@ -240,7 +130,9 @@ export default function StylingScreen() {
                 <Text style={styles.placeholderText}>
                   {selectedItem 
                     ? `We'll find the perfect pieces to match your ${selectedItem.category}.`
-                    : "Our AI will analyze your wardrobe to create the perfect look for your event."
+                    : multipleSelectedItems.length > 0
+                        ? "Curating a look from your selected pieces."
+                        : "Our AI will analyze your wardrobe to create the perfect look for your event."
                   }
                 </Text>
               </View>
@@ -268,7 +160,7 @@ export default function StylingScreen() {
             <View style={styles.outfitContainer}>
               <View style={styles.outfitHeader}>
                 <Text style={styles.outfitTitle}>
-                  {selectedItem ? "STYLED AROUND YOUR PICK" : "SUGGESTED LOOK"}
+                  {selectedItem || multipleSelectedItems.length > 0 ? "STYLED AROUND YOUR PICKS" : "SUGGESTED LOOK"}
                 </Text>
                 <View style={styles.outfitActions}>
                   <TouchableOpacity 
@@ -313,18 +205,6 @@ export default function StylingScreen() {
     </View>
   );
 }
-
-// NOTE: These category arrays would ideally be shared from a central types file
-const MALE_TOPS = ['t-shirt', 'shirt', 'sweater', 'top'];
-const MALE_BOTTOMS = ['trousers', 'jeans', 'shorts', 'bottom'];
-const MALE_SHOES = ['sneakers', 'boots', 'shoes'];
-const MALE_ACCESSORIES = ['tie', 'bag', 'accessories'];
-
-const FEMALE_TOPS = ['blouse', 'top', 'sweater', 'cardigan', 't-shirt'];
-const FEMALE_BOTTOMS = ['skirt', 'pants', 'jeans', 'shorts', 'bottom'];
-const FEMALE_DRESSES = ['dress', 'gown', 'jumpsuit'];
-const FEMALE_SHOES = ['heels', 'flats', 'sandals', 'boots', 'sneakers', 'shoes'];
-const FEMALE_ACCESSORIES = ['bag', 'jewelry', 'accessories'];
 
 const styles = StyleSheet.create({
   container: {
