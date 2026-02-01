@@ -1,6 +1,5 @@
 import { createTRPCRouter, publicProcedure } from "../create-context";
 import { z } from "zod";
-import { getFunctions, httpsCallable } from "firebase/functions";
 
 // Mocking prisma since it's missing in the environment but required for compilation of this file.
 // In a real scenario, we would fix the path or generate the client.
@@ -37,6 +36,47 @@ const LocalClothingSchema = z.object({
   patternDescription: z.string().optional(),
 });
 
+const callFirebaseFunction = async (functionName: string, data: any) => {
+  const projectId =
+    process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "dressya-6ff56";
+  const region = "us-central1";
+  const url = `https://${region}-${projectId}.cloudfunctions.net/${functionName}`;
+
+  console.log(`[Wardrobe] Calling Firebase function: ${url}`);
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(
+        `[Wardrobe] Firebase function ${functionName} returned an error: ${response.status} ${errorText}`
+      );
+      throw new Error(
+        `Firebase function failed with status: ${response.status}`
+      );
+    }
+
+    const json = await response.json();
+    console.log(`[Wardrobe] Received response from ${functionName}:`, json);
+
+    // Callable functions wrap result in 'result' field.
+    // Sometimes Genkit might wrap it differently, so we check for both.
+    const result = json.result !== undefined ? json.result : json.data;
+    return result !== undefined ? result : json;
+  } catch (error) {
+    console.error(
+      `[Wardrobe] Error calling Firebase function ${functionName}:`,
+      error
+    );
+    throw error;
+  }
+};
+
 const analyzeImageWithFirebase = async (
   imageUrl: string,
   includeCleanedImage: boolean = false
@@ -45,31 +85,11 @@ const analyzeImageWithFirebase = async (
     `[Wardrobe] Analyzing image with Firebase: ${imageUrl}, includeCleanedImage: ${includeCleanedImage}`
   );
 
-  const functionUrl =
-    "https://us-central1-closet-app-1337.cloudfunctions.net/analyzeImage";
-
   try {
-    const response = await fetch(functionUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        image_url: imageUrl,
-        include_cleaned_image: includeCleanedImage,
-      }),
+    const data = await callFirebaseFunction("analyzeImage", {
+      image: imageUrl,
+      include_cleaned_image: includeCleanedImage,
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(
-        `[Wardrobe] Firebase function returned an error: ${response.status} ${errorText}`
-      );
-      throw new Error(
-        `Firebase function failed with status: ${response.status}`
-      );
-    }
-
-    const data = await response.json();
-    console.log("[Wardrobe] Received data from Firebase:", data);
     return data;
   } catch (error) {
     console.error("[Wardrobe] Error calling Firebase function:", error);
@@ -277,28 +297,11 @@ export const wardrobeRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
-        const functions = getFunctions();
-        // Ensure region matches deployment
-        const generateOutfits = httpsCallable(functions, 'generateOutfitsFn');
-        
         console.log("[Wardrobe] Calling generateOutfitsFn with", input.wardrobe.length, "items");
-        
-        const result = await generateOutfits(input.wardrobe);
-        
-        console.log("[Wardrobe] generateOutfitsFn result:", result.data);
-        return result.data;
+        const data = await callFirebaseFunction("generateOutfitsFn", input.wardrobe);
+        return data;
       } catch (error: any) {
         console.error("Error generating outfits:", error);
-        if (error.code) {
-             console.error("Firebase Error Code:", error.code);
-        }
-        if (error.message) {
-             console.error("Firebase Error Message:", error.message);
-        }
-        if (error.details) {
-             console.error("Firebase Error Details:", error.details);
-        }
-        
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to generate outfits.",
