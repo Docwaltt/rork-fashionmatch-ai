@@ -17,10 +17,8 @@ function findEnvFile(startDir: string, limit = 10): string | null {
 }
 
 export function initializeEnv() {
-  if (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.EXPO_PUBLIC_GOOGLE_SERVICE_ACCOUNT_EMAIL) {
-    return;
-  }
-
+  // If we already have the main credentials, we might not need to load .env
+  // but loading it ensures we have everything (including possible new vars).
   const envFile = findEnvFile(process.cwd()) || findEnvFile(__dirname);
   if (envFile) {
     try {
@@ -31,9 +29,13 @@ export function initializeEnv() {
         if (match) {
           const key = match[1];
           let value = (match[2] || '').trim();
+          // Remove quotes
           if (value.startsWith('"') && value.endsWith('"')) value = value.substring(1, value.length - 1);
           if (value.startsWith("'") && value.endsWith("'")) value = value.substring(1, value.length - 1);
-          if (!process.env[key] || process.env[key] === 'undefined') process.env[key] = value;
+
+          if (!process.env[key] || process.env[key] === 'undefined') {
+            process.env[key] = value;
+          }
         }
       }
       config({ path: envFile });

@@ -29,51 +29,31 @@ const compressAndConvertToBase64 = async (uri: string): Promise<string> => {
   console.log("[AddItem] Compressing image...");
   
   try {
-    // Compress and resize the image to reduce payload size
     const manipulated = await ImageManipulator.manipulateAsync(
       uri,
-      [{ resize: { width: 800 } }], // Resize to max 800px width
+      [{ resize: { width: 800 } }],
       { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
     );
     
     if (manipulated.base64) {
-      const sizeKB = (manipulated.base64.length * 0.75) / 1024;
-      console.log(`[AddItem] Compressed image size: ${sizeKB.toFixed(0)}KB`);
       return manipulated.base64;
     }
   } catch (compressError) {
     console.warn("[AddItem] Compression failed, trying direct conversion:", compressError);
   }
   
-  // Fallback: direct conversion for web or if manipulation fails
-  if (Platform.OS === 'web') {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const dataUrl = reader.result as string;
-        const base64 = dataUrl.split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  } else {
-    // For native, use canvas-based compression as fallback
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const dataUrl = reader.result as string;
-        const base64 = dataUrl.split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  }
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 };
 
 export default function AddItemScreen() {
@@ -86,11 +66,13 @@ export default function AddItemScreen() {
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<ClothingCategory | null>(null);
   const [detectedColors, setDetectedColors] = useState<string[]>([]);
-   const [detectedTexture, setDetectedTexture] = useState<string | null>(null);
-   const [detectedDesign, setDetectedDesign] = useState<string | null>(null);
+  const [detectedTexture, setDetectedTexture] = useState<string | null>(null);
+  const [detectedDesign, setDetectedDesign] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const { addItem } = useWardrobe();
+
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const analyzeImageMutation = trpc.wardrobe.analyzeImage.useMutation({
     onSuccess: (data) => {
@@ -98,17 +80,11 @@ export default function AddItemScreen() {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
-      console.log("[AddItem] Processing successful. Response data:", {
-        category: data.category,
-        color: data.color,
-        hasCleanedImage: !!data.cleanedImage
-      });
+      console.log("[AddItem] AI Analysis successful:", data.category);
       setAnalysisError(null);
       
       if (data.cleanedImage) {
         setProcessedImage(data.cleanedImage);
-      } else {
-        console.log("[AddItem] No cleaned image returned from AI");
       }
       if (data.color) {
         setDetectedColors([data.color]);
@@ -119,33 +95,28 @@ export default function AddItemScreen() {
       if (data.designPattern) {
         setDetectedDesign(data.designPattern);
       }
+
       if (data.category) {
         const validCategories = categories.map(c => c.id);
         const returnedCategory = data.category as ClothingCategory;
 
         if (validCategories.includes(returnedCategory)) {
-          console.log("[AddItem] Setting category:", returnedCategory);
           setSelectedCategory(returnedCategory);
         } else {
-           console.log("[AddItem] Category from API not in valid list:", returnedCategory);
-           // Try one last mapping check on the client side
            const lowercaseCat = returnedCategory.toLowerCase();
            const match = validCategories.find(id =>
              lowercaseCat.includes(id.toLowerCase()) ||
              id.toLowerCase().includes(lowercaseCat)
            );
            if (match) {
-             console.log("[AddItem] Client-side category match found:", match);
              setSelectedCategory(match as ClothingCategory);
            } else {
-             // Second pass: word by word matching
              const words = lowercaseCat.split(/\s+/);
              const wordMatch = validCategories.find(id => {
                const idLower = id.toLowerCase();
                return words.some(word => word.length > 3 && (idLower.includes(word) || word.includes(idLower)));
              });
              if (wordMatch) {
-               console.log("[AddItem] Client-side word-based match found:", wordMatch);
                setSelectedCategory(wordMatch as ClothingCategory);
              }
            }
@@ -158,39 +129,29 @@ export default function AddItemScreen() {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
-      console.error("[AddItem] Processing error:", error.message);
+      console.error("[AddItem] AI Analysis error:", error.message);
       setIsProcessing(false);
       setAnalysisError(error.message || "AI analysis failed. Please select manually.");
     },
   });
 
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-
   const handleProcessImage = async (imageUri: string) => {
     setIsProcessing(true);
     setCapturedImage(imageUri);
-    setProcessedImage(imageUri); // Use original image as fallback
+    setProcessedImage(imageUri);
     
-    // Safety timeout to allow manual selection if AI is too slow
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
       setIsProcessing(false);
       timeoutRef.current = null;
-      console.log("[AddItem] Analysis timeout, allowing manual selection");
+      console.log("[AddItem] Analysis timeout");
     }, 60000);
 
     try {
-      console.log("[AddItem] Preparing image for tRPC...");
-      let base64Image: string;
+      console.log("[AddItem] Preparing image for AI...");
+      const base64 = await compressAndConvertToBase64(imageUri);
+      const base64Image = `data:image/jpeg;base64,${base64}`;
 
-      if (imageUri.startsWith("data:")) {
-        base64Image = imageUri;
-      } else {
-        const base64 = await compressAndConvertToBase64(imageUri);
-        base64Image = `data:image/jpeg;base64,${base64}`;
-      }
-
-      console.log("[AddItem] Calling tRPC wardrobe.analyzeImage...");
       analyzeImageMutation.mutate({
         image: base64Image,
         gender: userProfile?.gender || undefined,
@@ -211,9 +172,7 @@ export default function AddItemScreen() {
     if (userProfile?.gender) {
       return getCategoriesForGender(userProfile.gender);
     }
-    // Fallback if profile is missing or loading
-    // Return a default list of common categories to ensure the UI is not empty
-    const fallbackCategories: { id: ClothingCategory; label: string; icon: string }[] = [
+    return [
       { id: 'top', label: 'Top', icon: '👕' },
       { id: 'bottom', label: 'Bottom', icon: '👖' },
       { id: 'dress', label: 'Dress', icon: '👗' },
@@ -221,20 +180,16 @@ export default function AddItemScreen() {
       { id: 'outerwear', label: 'Outer', icon: '🧥' },
       { id: 'accessories', label: 'Accs', icon: '👜' },
     ];
-    return fallbackCategories;
   }, [userProfile?.gender]);
 
   const handleTakePhoto = async () => {
     if (!cameraRef.current) return;
-
     try {
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
         skipProcessing: true,
       });
-      
       if (photo && photo.uri) {
-        console.log("[AddItem] Photo captured:", photo.uri);
         setShowCamera(false);
         handleProcessImage(photo.uri);
       }
@@ -251,11 +206,8 @@ export default function AddItemScreen() {
         allowsEditing: true,
         quality: 0.8,
       });
-
       if (!result.canceled && result.assets[0]) {
-        const asset = result.assets[0];
-        console.log("[AddItem] Image picked:", asset.uri);
-        handleProcessImage(asset.uri);
+        handleProcessImage(result.assets[0].uri);
       }
     } catch (error) {
       console.error("Error picking image:", error);
@@ -265,7 +217,6 @@ export default function AddItemScreen() {
 
   const handleSaveItem = () => {
     if (!processedImage || !selectedCategory) return;
-
     const newItem = {
       id: Date.now().toString(),
       imageUri: processedImage,
@@ -275,19 +226,12 @@ export default function AddItemScreen() {
       designPattern: detectedDesign || undefined,
       addedAt: Date.now(),
     };
-
     addItem(newItem);
-    
-    Alert.alert(
-      "Added!",
-      "Item has been added to your wardrobe.",
-      [{ text: "OK", onPress: handleReset }]
-    );
+    Alert.alert("Added!", "Item has been added to your wardrobe.", [{ text: "OK", onPress: handleReset }]);
   };
 
   const handleStyleMe = () => {
     if (!processedImage || !selectedCategory) return;
-
     const newItem = {
       id: Date.now().toString(),
       imageUri: processedImage,
@@ -297,18 +241,8 @@ export default function AddItemScreen() {
       designPattern: detectedDesign || undefined,
       addedAt: Date.now(),
     };
-
     addItem(newItem);
-    
-    // Navigate to styling screen with the new item
-    router.push({
-      pathname: '/styling',
-      params: { 
-        itemId: newItem.id,
-        fromAdd: 'true'
-      }
-    });
-    
+    router.push({ pathname: '/styling', params: { itemId: newItem.id, fromAdd: 'true' } });
     handleReset();
   };
 
@@ -335,7 +269,6 @@ export default function AddItemScreen() {
         </View>
       );
     }
-
     return (
       <View style={styles.cameraContainer}>
         <StatusBar hidden />
@@ -345,16 +278,13 @@ export default function AddItemScreen() {
               <X size={24} color="white" />
             </TouchableOpacity>
             <View style={styles.cameraControls}>
-              <TouchableOpacity 
-                style={styles.flipButton} 
-                onPress={() => setFacing(current => (current === "back" ? "front" : "back"))}
-              >
+              <TouchableOpacity onPress={() => setFacing(c => (c === "back" ? "front" : "back"))}>
                 <RefreshCcw size={24} color="white" />
               </TouchableOpacity>
               <TouchableOpacity style={styles.captureButton} onPress={handleTakePhoto}>
                 <View style={styles.captureButtonInner} />
               </TouchableOpacity>
-              <View style={styles.flipButtonPlaceholder} />
+              <View style={{ width: 24 }} />
             </View>
           </SafeAreaView>
         </CameraView>
@@ -365,11 +295,7 @@ export default function AddItemScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      <LinearGradient
-        colors={[Colors.richBlack, "#121214"]}
-        style={StyleSheet.absoluteFill}
-      />
-      
+      <LinearGradient colors={[Colors.richBlack, "#121214"]} style={StyleSheet.absoluteFill} />
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
         <View style={styles.header}>
            <Text style={styles.headerSubtitle}>ADD TO COLLECTION</Text>
@@ -384,15 +310,12 @@ export default function AddItemScreen() {
                   <Camera size={32} color={Colors.gold[400]} strokeWidth={1.5} />
                 </View>
                 <Text style={styles.actionTitle}>TAKE PHOTO</Text>
-                <Text style={styles.actionDesc}>Capture with camera</Text>
               </TouchableOpacity>
-
               <TouchableOpacity style={styles.actionCard} onPress={handlePickImage}>
                 <View style={styles.actionIcon}>
                   <ImageIcon size={32} color={Colors.gold[400]} strokeWidth={1.5} />
                 </View>
                 <Text style={styles.actionTitle}>UPLOAD</Text>
-                <Text style={styles.actionDesc}>From gallery</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -400,21 +323,11 @@ export default function AddItemScreen() {
           <ScrollView style={styles.formContainer}>
             <View style={styles.imageSection}>
               <View style={styles.imagePreviewContainer}>
-                <Image 
-                  source={{ uri: processedImage || capturedImage }} 
-                  style={styles.mainPreview}
-                  contentFit="contain"
-                />
+                <Image source={{ uri: processedImage || capturedImage }} style={styles.mainPreview} contentFit="contain" />
                 {isProcessing && (
                   <View style={styles.processingOverlay}>
                     <ActivityIndicator size="large" color={Colors.gold[400]} />
                     <Text style={styles.processingText}>ANALYZING...</Text>
-                    <TouchableOpacity 
-                      style={styles.skipButton} 
-                      onPress={() => setIsProcessing(false)}
-                    >
-                      <Text style={styles.skipButtonText}>SKIP</Text>
-                    </TouchableOpacity>
                   </View>
                 )}
               </View>
@@ -436,36 +349,24 @@ export default function AddItemScreen() {
                 {detectedColors.length > 0 && (
                   <View style={{ flex: 1, minWidth: '45%' }}>
                     <Text style={styles.sectionTitle}>COLOR</Text>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      {detectedColors.map((color, index) => (
-                        <View key={index} style={styles.detectedInfoChip}>
-                          <Text style={styles.detectedInfoText}>
-                            {color.toUpperCase()}
-                          </Text>
-                        </View>
-                      ))}
+                    <View style={styles.detectedInfoChip}>
+                      <Text style={styles.detectedInfoText}>{detectedColors[0].toUpperCase()}</Text>
                     </View>
                   </View>
                 )}
-
                 {detectedTexture && (
                   <View style={{ flex: 1, minWidth: '45%' }}>
                     <Text style={styles.sectionTitle}>TEXTURE</Text>
                     <View style={styles.detectedInfoChip}>
-                      <Text style={styles.detectedInfoText}>
-                        {detectedTexture.toUpperCase()}
-                      </Text>
+                      <Text style={styles.detectedInfoText}>{detectedTexture.toUpperCase()}</Text>
                     </View>
                   </View>
                 )}
-
                 {detectedDesign && detectedDesign !== 'none' && (
                   <View style={{ flex: 1, minWidth: '45%' }}>
                     <Text style={styles.sectionTitle}>DESIGN</Text>
                     <View style={styles.detectedInfoChip}>
-                      <Text style={styles.detectedInfoText}>
-                        {detectedDesign.toUpperCase()}
-                      </Text>
+                      <Text style={styles.detectedInfoText}>{detectedDesign.toUpperCase()}</Text>
                     </View>
                   </View>
                 )}
@@ -476,17 +377,11 @@ export default function AddItemScreen() {
                 {categories.map((cat) => (
                   <TouchableOpacity
                     key={cat.id}
-                    style={[
-                      styles.categoryChip,
-                      selectedCategory === cat.id && styles.categoryChipSelected
-                    ]}
+                    style={[styles.categoryChip, selectedCategory === cat.id && styles.categoryChipSelected]}
                     onPress={() => setSelectedCategory(cat.id as ClothingCategory)}
                   >
                     <Text style={styles.categoryIcon}>{cat.icon}</Text>
-                    <Text style={[
-                      styles.categoryChipText,
-                      selectedCategory === cat.id && styles.categoryChipTextSelected
-                    ]}>{cat.label}</Text>
+                    <Text style={[styles.categoryChipText, selectedCategory === cat.id && styles.categoryChipTextSelected]}>{cat.label}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -494,28 +389,16 @@ export default function AddItemScreen() {
 
             <View style={styles.footer}>
               <TouchableOpacity
-                style={[
-                  styles.styleButton,
-                  (!processedImage || !selectedCategory || isProcessing) && styles.saveButtonDisabled
-                ]}
+                style={[styles.styleButton, (!processedImage || !selectedCategory || isProcessing) && styles.saveButtonDisabled]}
                 onPress={handleStyleMe}
                 disabled={!processedImage || !selectedCategory || isProcessing}
               >
-                <LinearGradient
-                  colors={(!processedImage || !selectedCategory || isProcessing) 
-                    ? [Colors.gray[200], Colors.gray[200]] 
-                    : [Colors.gold[300], Colors.gold[500]]}
-                  style={styles.saveButtonGradient}
-                >
+                <LinearGradient colors={[Colors.gold[300], Colors.gold[500]]} style={styles.saveButtonGradient}>
                   <Text style={styles.saveButtonText}>✨ STYLE ME</Text>
                 </LinearGradient>
               </TouchableOpacity>
-
               <TouchableOpacity
-                style={[
-                  styles.saveButton,
-                  (!processedImage || !selectedCategory || isProcessing) && styles.saveButtonDisabled
-                ]}
+                style={[styles.saveButton, (!processedImage || !selectedCategory || isProcessing) && styles.saveButtonDisabled]}
                 onPress={handleSaveItem}
                 disabled={!processedImage || !selectedCategory || isProcessing}
               >
@@ -532,303 +415,53 @@ export default function AddItemScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.richBlack,
-  },
-  safeArea: {
-    flex: 1,
-  },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 40,
-  },
-  headerSubtitle: {
-    fontSize: 10,
-    color: Colors.gold[400],
-    letterSpacing: 2,
-    marginBottom: 4,
-    fontWeight: "600",
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: "300",
-    color: Colors.white,
-    letterSpacing: 2,
-    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif-light',
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-  },
-  actionsGrid: {
-    gap: 16,
-  },
-  actionCard: {
-    backgroundColor: Colors.card,
-    borderRadius: 0,
-    padding: 32,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.gray[100],
-  },
-  actionIcon: {
-    marginBottom: 16,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: Colors.gray[50],
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.gray[200],
-  },
-  actionTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Colors.white,
-    letterSpacing: 1.5,
-    marginBottom: 4,
-  },
-  actionDesc: {
-    fontSize: 12,
-    color: Colors.gray[500],
-  },
-  formContainer: {
-    flex: 1,
-  },
-  imageSection: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  imagePreviewContainer: {
-    width: 240,
-    height: 240,
-    backgroundColor: Colors.card,
-    borderWidth: 1,
-    borderColor: Colors.gray[100],
-    overflow: 'hidden',
-    marginBottom: 16,
-  },
-  mainPreview: {
-    width: '100%',
-    height: '100%',
-  },
-  retakeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 8,
-  },
-  retakeText: {
-    color: Colors.gray[500],
-    fontSize: 10,
-    letterSpacing: 1,
-    fontWeight: '600',
-  },
-  formSection: {
-    paddingHorizontal: 24,
-    marginBottom: 40,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    color: Colors.gray[500],
-    letterSpacing: 2,
-    marginBottom: 16,
-    fontWeight: '600',
-  },
-  categoryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  categoryIcon: {
-    fontSize: 20,
-    marginBottom: 8,
-  },
-  categoryChip: {
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: Colors.gray[200],
-    borderRadius: 0,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    width: '30%',
-  },
-  categoryChipSelected: {
-    borderColor: Colors.gold[400],
-    backgroundColor: 'rgba(212, 175, 55, 0.1)',
-  },
-  categoryChipText: {
-    fontSize: 12,
-    color: Colors.gray[500],
-    letterSpacing: 1,
-    fontWeight: '500',
-  },
-  categoryChipTextSelected: {
-    color: Colors.gold[400],
-    fontWeight: '600',
-  },
-  footer: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-  },
-  styleButton: {
-    borderRadius: 0,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  saveButton: {
-    borderRadius: 0,
-    overflow: 'hidden',
-  },
-  saveButtonDisabled: {
-    opacity: 0.5,
-  },
-  saveButtonGradient: {
-    paddingVertical: 18,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    color: Colors.richBlack,
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 2,
-  },
-  saveButtonOutline: {
-    paddingVertical: 18,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.gold[400],
-    backgroundColor: 'transparent',
-  },
-  saveButtonOutlineText: {
-    color: Colors.gold[400],
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 2,
-  },
-  cameraContainer: {
-    flex: 1,
-    backgroundColor: 'black',
-  },
-  camera: {
-    flex: 1,
-  },
-  cameraOverlay: {
-    flex: 1,
-    justifyContent: 'space-between',
-    padding: 24,
-  },
-  closeButton: {
-    padding: 12,
-  },
-  cameraControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingBottom: 40,
-    width: '100%',
-  },
-  flipButton: {
-    padding: 12,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 30,
-  },
-  flipButtonPlaceholder: {
-    width: 48,
-  },
-  captureButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'white',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  captureButtonInner: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: 'white',
-    borderWidth: 2,
-    borderColor: 'black',
-  },
-  permissionContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.richBlack,
-  },
-  permissionText: {
-    color: Colors.white,
-    marginBottom: 20,
-  },
-  permissionButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    backgroundColor: Colors.white,
-  },
-  permissionButtonText: {
-    fontWeight: '600',
-  },
-  processingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  processingText: {
-    color: Colors.gold[400],
-    fontSize: 12,
-    letterSpacing: 2,
-    marginTop: 12,
-    fontWeight: '600',
-  },
-  skipButton: {
-    marginTop: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    borderWidth: 1,
-    borderColor: Colors.gray[500],
-  },
-  skipButtonText: {
-    color: Colors.gray[400],
-    fontSize: 11,
-    letterSpacing: 1.5,
-    fontWeight: '600',
-  },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: 'rgba(212, 175, 55, 0.1)',
-    borderWidth: 1,
-    borderColor: Colors.gold[400],
-    padding: 12,
-    marginBottom: 20,
-  },
-  errorText: {
-    color: Colors.gold[400],
-    fontSize: 12,
-    flex: 1,
-    letterSpacing: 0.5,
-  },
-  detectedInfoChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: Colors.card,
-    borderWidth: 1,
-    borderColor: Colors.gold[400],
-    borderRadius: 0,
-    alignSelf: 'flex-start',
-  },
-  detectedInfoText: {
-    color: Colors.gold[400],
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 1,
-  },
+  container: { flex: 1, backgroundColor: Colors.richBlack },
+  safeArea: { flex: 1 },
+  header: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 40 },
+  headerSubtitle: { fontSize: 10, color: Colors.gold[400], letterSpacing: 2, marginBottom: 4, fontWeight: "600" },
+  headerTitle: { fontSize: 28, fontWeight: "300", color: Colors.white, letterSpacing: 2 },
+  content: { flex: 1, paddingHorizontal: 24 },
+  actionsGrid: { gap: 16 },
+  actionCard: { backgroundColor: Colors.card, padding: 32, alignItems: "center", borderWidth: 1, borderColor: Colors.gray[100] },
+  actionIcon: { marginBottom: 16, width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.gray[50], justifyContent: "center", alignItems: "center" },
+  actionTitle: { fontSize: 14, fontWeight: "600", color: Colors.white, letterSpacing: 1.5 },
+  formContainer: { flex: 1 },
+  imageSection: { alignItems: 'center', marginBottom: 40 },
+  imagePreviewContainer: { width: 240, height: 240, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.gray[100], overflow: 'hidden', marginBottom: 16 },
+  mainPreview: { width: '100%', height: '100%' },
+  retakeButton: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8 },
+  retakeText: { color: Colors.gray[500], fontSize: 10, letterSpacing: 1, fontWeight: '600' },
+  formSection: { paddingHorizontal: 24, marginBottom: 40 },
+  sectionTitle: { fontSize: 12, color: Colors.gray[500], letterSpacing: 2, marginBottom: 16, fontWeight: '600' },
+  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  categoryIcon: { fontSize: 20, marginBottom: 8 },
+  categoryChip: { paddingVertical: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: Colors.gray[200], backgroundColor: 'transparent', alignItems: 'center', width: '30%' },
+  categoryChipSelected: { borderColor: Colors.gold[400], backgroundColor: 'rgba(212, 175, 55, 0.1)' },
+  categoryChipText: { fontSize: 12, color: Colors.gray[500], letterSpacing: 1, fontWeight: '500' },
+  categoryChipTextSelected: { color: Colors.gold[400], fontWeight: '600' },
+  footer: { paddingHorizontal: 24, paddingBottom: 40 },
+  styleButton: { borderRadius: 0, overflow: 'hidden', marginBottom: 12 },
+  saveButton: { borderRadius: 0, overflow: 'hidden' },
+  saveButtonDisabled: { opacity: 0.5 },
+  saveButtonGradient: { paddingVertical: 18, alignItems: 'center' },
+  saveButtonText: { color: Colors.richBlack, fontSize: 14, fontWeight: '700', letterSpacing: 2 },
+  saveButtonOutline: { paddingVertical: 18, alignItems: 'center', borderWidth: 1, borderColor: Colors.gold[400] },
+  saveButtonOutlineText: { color: Colors.gold[400], fontSize: 14, fontWeight: '700', letterSpacing: 2 },
+  cameraContainer: { flex: 1, backgroundColor: 'black' },
+  camera: { flex: 1 },
+  cameraOverlay: { flex: 1, justifyContent: 'space-between', padding: 24 },
+  closeButton: { padding: 12 },
+  cameraControls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingBottom: 40, width: '100%' },
+  captureButton: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
+  captureButtonInner: { width: 70, height: 70, borderRadius: 35, backgroundColor: 'white', borderWidth: 2, borderColor: 'black' },
+  permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.richBlack },
+  permissionText: { color: Colors.white, marginBottom: 20 },
+  permissionButton: { paddingVertical: 12, paddingHorizontal: 24, backgroundColor: Colors.white },
+  permissionButtonText: { fontWeight: '600' },
+  processingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
+  processingText: { color: Colors.gold[400], fontSize: 12, letterSpacing: 2, marginTop: 12, fontWeight: '600' },
+  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(212, 175, 55, 0.1)', borderWidth: 1, borderColor: Colors.gold[400], padding: 12, marginBottom: 20 },
+  errorText: { color: Colors.gold[400], fontSize: 12, flex: 1, letterSpacing: 0.5 },
+  detectedInfoChip: { paddingHorizontal: 12, paddingVertical: 8, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.gold[400], alignSelf: 'flex-start' },
+  detectedInfoText: { color: Colors.gold[400], fontSize: 11, fontWeight: '600', letterSpacing: 1 },
 });

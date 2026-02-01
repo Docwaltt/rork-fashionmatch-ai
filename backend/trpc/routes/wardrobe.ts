@@ -41,13 +41,12 @@ export const wardrobeRouter = createTRPCRouter({
         removeBackground: true,
         remove_background: true,
         background_removal: true,
+        background: "remove",
         includeCleanedImage: true,
         includeSegmentation: true,
         cleaned: true,
-        background: "remove",
       };
       console.log("[Wardrobe] Request body keys:", Object.keys(requestBody));
-      console.log("[Wardrobe] Request payload size:", JSON.stringify(requestBody).length, "bytes");
 
       // Retry logic for transient failures
       const MAX_RETRIES = 2;
@@ -57,7 +56,6 @@ export const wardrobeRouter = createTRPCRouter({
       const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.EXPO_PUBLIC_GOOGLE_SERVICE_ACCOUNT_EMAIL;
       const privateKey = (process.env.GOOGLE_PRIVATE_KEY || process.env.EXPO_PUBLIC_GOOGLE_PRIVATE_KEY)?.replace(/\\n/g, '\n');
       const projectId = process.env.GOOGLE_PROJECT_ID || process.env.EXPO_PUBLIC_GOOGLE_PROJECT_ID || process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID;
-
 
       if (!clientEmail || !privateKey || !projectId) {
         const missing = [];
@@ -86,10 +84,10 @@ export const wardrobeRouter = createTRPCRouter({
           const client = await auth.getIdTokenClient(functionUrl);
           const authHeaders = await client.getRequestHeaders();
 
-          // Handle different Header formats (Standard Headers object vs Plain Object)
+          // Handle different Header formats
           let idToken = '';
           if (typeof authHeaders.get === 'function') {
-            idToken = authHeaders.get('Authorization') || authHeaders.get('authorization') || '';
+            idToken = (authHeaders as any).get('Authorization') || (authHeaders as any).get('authorization') || '';
           } else {
             const h = authHeaders as Record<string, string>;
             idToken = h['Authorization'] || h['authorization'] || '';
@@ -111,51 +109,11 @@ export const wardrobeRouter = createTRPCRouter({
           clearTimeout(timeoutId);
 
         console.log("[Wardrobe] Firebase response status:", response.status);
-        console.log("[Wardrobe] Firebase response ok:", response.ok);
 
-        console.log("[Wardrobe] Response headers:", Object.fromEntries(response.headers.entries()));
-        
         if (!response.ok) {
           const errorText = await response.text();
-          console.error("[Wardrobe] ===== FIREBASE ERROR =====");
-          console.error("[Wardrobe] Status:", response.status);
-          console.error("[Wardrobe] Status Text:", response.statusText);
-          console.error("[Wardrobe] URL called:", functionUrl);
-          console.error("[Wardrobe] Raw error response:", errorText);
-          
-          // Try to parse JSON error if possible
-          let errorMessage = `Firebase function failed (${response.status})`;
-          let errorDetails = '';
-          try {
-            const errorJson = JSON.parse(errorText);
-            console.error("[Wardrobe] Parsed error JSON:", JSON.stringify(errorJson, null, 2));
-            errorDetails = errorJson.error?.message || errorJson.message || errorJson.error || errorJson.details || '';
-            if (typeof errorDetails === 'object') {
-              errorDetails = JSON.stringify(errorDetails);
-            }
-            errorMessage = errorDetails || errorMessage;
-          } catch {
-            errorDetails = errorText.substring(0, 300);
-            console.error("[Wardrobe] Could not parse error as JSON, raw text:", errorDetails);
-          }
-          console.error("[Wardrobe] ===== END FIREBASE ERROR =====");
-          
-          // Provide user-friendly messages based on status
-          if (response.status === 400) {
-            throw new Error(`Bad request: ${errorMessage}`);
-          } else if (response.status === 401 || response.status === 403) {
-            throw new Error("Authentication error with Firebase function.");
-          } else if (response.status === 404) {
-            throw new Error("Firebase function 'processClothingFn' not found.");
-          } else if (response.status === 413) {
-            throw new Error("Image too large. Please use a smaller image.");
-          } else if (response.status === 500) {
-            throw new Error(`Server error: ${errorMessage}`);
-          } else if (response.status === 502 || response.status === 503) {
-            throw new Error("Firebase function temporarily unavailable. Try again.");
-          }
-          
-          throw new Error(errorMessage);
+          console.error("[Wardrobe] Firebase error response:", errorText);
+          throw new Error(`Firebase function failed (${response.status}): ${errorText}`);
         }
 
         let data = await response.json();
@@ -171,7 +129,6 @@ export const wardrobeRouter = createTRPCRouter({
         }
 
         console.log("[Wardrobe] Response data keys:", Object.keys(data));
-        console.log("[Wardrobe] Full response data (truncated):", JSON.stringify(data).substring(0, 500));
 
         const rawCategory = data.category || data.type || data.label || '';
         const rawColor = data.color || data.colour || data.dominantColor || data.dominant_color || '';
@@ -179,13 +136,8 @@ export const wardrobeRouter = createTRPCRouter({
         const rawDesign = data.designPattern || data.pattern || data.design || data.style || 'none';
 
         console.log("[Wardrobe] Extracted raw fields:", { rawCategory, rawColor, rawTexture, rawDesign });
-        console.log("[Wardrobe] cleanedImageUrl present:", !!data.cleanedImageUrl);
-        console.log("[Wardrobe] processedImage present:", !!data.processedImage);
-        console.log("[Wardrobe] image present:", !!data.image);
-        console.log("[Wardrobe] ===== END FIREBASE SUCCESS RESPONSE =====");
 
-        // Handle different response formats from Firebase function
-        // Check multiple possible field names the backend might use
+        // Handle different response formats for image
         let cleanedImage: string | null = null;
         const possibleImageFields = [
           'cleanedImage', 'processedImage', 'backgroundRemovedImage',
@@ -204,25 +156,10 @@ export const wardrobeRouter = createTRPCRouter({
           }
         }
 
-        if (!cleanedImage) {
-          console.error("[Wardrobe] No cleaned image found in any expected field");
-          console.error("[Wardrobe] Available fields:", Object.keys(data));
-          console.error("[Wardrobe] Field values (truncated):", Object.entries(data).map(([k, v]) => 
-            `${k}: ${typeof v === 'string' ? v.substring(0, 50) + '...' : typeof v}`
-          ));
-          // Return null for cleanedImage - frontend will handle fallback
-          return {
-            category: data.category?.toLowerCase()?.trim() || 'unknown',
-            color: data.color || data.dominantColor || 'unknown',
-            cleanedImage: null,
-            backgroundRemovalFailed: true,
-          };
-        }
-
         // Validate category against valid options
         let category = rawCategory.toLowerCase().trim();
         
-        // Handle common variations and synonyms to map to our granular categories
+        // Handle common variations and synonyms
         const categoryMap: Record<string, string> = {
           // Males
           'tshirt': 't-shirt',
@@ -272,60 +209,33 @@ export const wardrobeRouter = createTRPCRouter({
         }
 
         if (category && !categoryIds.includes(category)) {
-          // Try to find a close match if not found in map
+          // Try to find a close match
           const matchedCat = categoryIds.find(id => 
             category.includes(id) || id.includes(category)
           );
           if (matchedCat) {
             category = matchedCat;
           }
-          console.log("[Wardrobe] Category final match check:", category, "is valid:", categoryIds.includes(category));
+          console.log("[Wardrobe] Category match check:", category, "is valid:", categoryIds.includes(category));
         }
 
-          return {
-            category: category || rawCategory || 'unknown',
-            color: rawColor || 'unknown',
-            texture: rawTexture,
-            designPattern: rawDesign,
-            cleanedImage: cleanedImage,
-          };
+        return {
+          category: category || rawCategory || 'unknown',
+          color: rawColor || 'unknown',
+          texture: rawTexture,
+          designPattern: rawDesign,
+          cleanedImage: cleanedImage,
+        };
 
         } catch (error: any) {
           console.error(`[Wardrobe] Attempt ${attempt} failed:`, error?.message);
           lastError = error;
-          
-          // Don't retry for non-transient errors
-          const isTransient = 
-            error?.name === 'AbortError' ||
-            error?.message?.includes('fetch') ||
-            error?.message?.includes('network') ||
-            error?.message?.includes('ECONNREFUSED') ||
-            error?.message?.includes('ETIMEDOUT') ||
-            error?.name === 'TypeError';
-          
-          if (!isTransient || attempt === MAX_RETRIES) {
-            break;
-          }
-          
-          // Wait before retry (exponential backoff)
-          console.log(`[Wardrobe] Waiting ${attempt * 2}s before retry...`);
+          const isTransient = error?.name === 'AbortError' || error?.message?.includes('fetch') || error?.name === 'TypeError';
+          if (!isTransient || attempt === MAX_RETRIES) break;
           await new Promise(r => setTimeout(r, attempt * 2000));
         }
       }
 
-      // All retries failed
-      console.error("[Wardrobe] ===== ALL RETRIES FAILED =====");
-      console.error("[Wardrobe] Final error:", lastError?.message);
-      console.error("[Wardrobe] Error name:", lastError?.name);
-      
-      if (lastError?.name === 'AbortError') {
-        throw new Error("Request timed out. The image processing service is not responding.");
-      }
-      
-      if (lastError?.message?.includes("fetch") || lastError?.name === "TypeError") {
-        throw new Error("Cannot connect to image processing service. Please verify the Firebase function is deployed and accessible.");
-      }
-      
       throw new Error(lastError?.message || "Failed to analyze image. Please try again.");
     }),
 
@@ -343,60 +253,45 @@ export const wardrobeRouter = createTRPCRouter({
         throw new Error("Your wardrobe is empty. Add some clothes first!");
       }
 
-      // Group items by category
-      const tops = items.filter((item) => item.category === "top" || item.category === "shirt" || item.category === "t-shirt");
+      // Simple heuristic based grouping
+      const tops = items.filter((item) => item.category === "top" || item.category === "shirt" || item.category === "t-shirt" || item.category === "polo");
       const bottoms = items.filter((item) => item.category === "bottom" || item.category === "trousers" || item.category === "jeans" || item.category === "shorts");
-      const dresses = items.filter((item) => item.category === "dress" || item.category === "gown");
-      const outerwear = items.filter((item) => item.category === "outerwear" || item.category === "jacket" || item.category === "coat");
-      const shoes = items.filter((item) => item.category === "shoes" || item.category === "sneakers" || item.category === "boots");
-      const accessories = items.filter((item) => item.category === "accessories" || item.category === "bag" || item.category === "jewelry");
+      const dresses = items.filter((item) => item.category === "dress" || item.category === "gown" || item.category === "jumpsuit");
+      const outerwear = items.filter((item) => item.category === "outerwear" || item.category === "jacket" || item.category === "coat" || item.category === "blazer");
+      const shoes = items.filter((item) => item.category === "shoes" || item.category === "sneakers" || item.category === "boots" || item.category === "heels" || item.category === "flats");
+      const accessories = items.filter((item) => item.category === "accessories" || item.category === "bag" || item.category === "jewelry" || item.category === "watch");
 
       const suggestion: any[] = [];
-
-      // Logic for different events
       const isFormal = event === 'formal' || event === 'business';
       const isWorkout = event === 'workout';
 
-      // 1. Core piece (Dress or Top+Bottom)
-      if (dresses.length > 0 && (gender === 'female' || Math.random() > 0.7) && !isWorkout) {
-        // Suggested dress
+      // Selection logic
+      if (dresses.length > 0 && !isWorkout && (gender === 'female' || Math.random() > 0.8)) {
         suggestion.push(dresses[Math.floor(Math.random() * dresses.length)]);
       } else {
-        // Suggested Top + Bottom
-        if (tops.length > 0) {
-          suggestion.push(tops[Math.floor(Math.random() * tops.length)]);
-        }
-        if (bottoms.length > 0) {
-          suggestion.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
-        }
+        if (tops.length > 0) suggestion.push(tops[Math.floor(Math.random() * tops.length)]);
+        if (bottoms.length > 0) suggestion.push(bottoms[Math.floor(Math.random() * bottoms.length)]);
       }
 
-      // 2. Outerwear (Conditional)
-      if (outerwear.length > 0) {
-        const needsOuterwear = isFormal || Math.random() > 0.5;
-        if (needsOuterwear) {
-          suggestion.push(outerwear[Math.floor(Math.random() * outerwear.length)]);
-        }
+      if (outerwear.length > 0 && (isFormal || Math.random() > 0.5)) {
+        suggestion.push(outerwear[Math.floor(Math.random() * outerwear.length)]);
       }
 
-      // 3. Shoes
       if (shoes.length > 0) {
         suggestion.push(shoes[Math.floor(Math.random() * shoes.length)]);
       }
 
-      // 4. Accessories
-      if (accessories.length > 0 && Math.random() > 0.4) {
+      if (accessories.length > 0 && Math.random() > 0.3) {
         suggestion.push(accessories[Math.floor(Math.random() * accessories.length)]);
       }
 
-      // Ensure we have at least something
       if (suggestion.length === 0) {
         suggestion.push(items[Math.floor(Math.random() * items.length)]);
       }
 
       return {
         suggestion,
-        reasoning: `Selected based on the ${event} theme and your available collection.`,
+        reasoning: `Curated for a ${event} look based on your unique style profile.`,
       };
     }),
 });
