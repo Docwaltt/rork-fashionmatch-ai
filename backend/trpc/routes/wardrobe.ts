@@ -278,15 +278,31 @@ export const wardrobeRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       try {
         const functions = getFunctions();
+        // Ensure region matches deployment
         const generateOutfits = httpsCallable(functions, 'generateOutfitsFn');
-        // Correctly passing the array as the data payload, not wrapping it in an object
+        
+        console.log("[Wardrobe] Calling generateOutfitsFn with", input.wardrobe.length, "items");
+        
         const result = await generateOutfits(input.wardrobe);
+        
+        console.log("[Wardrobe] generateOutfitsFn result:", result.data);
         return result.data;
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error generating outfits:", error);
+        if (error.code) {
+             console.error("Firebase Error Code:", error.code);
+        }
+        if (error.message) {
+             console.error("Firebase Error Message:", error.message);
+        }
+        if (error.details) {
+             console.error("Firebase Error Details:", error.details);
+        }
+        
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to generate outfits.",
+          cause: error,
         });
       }
     }),
