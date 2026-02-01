@@ -65,8 +65,14 @@ const callFirebaseFunction = async (functionName: string, data: any) => {
     console.log(`[Wardrobe] Received response from ${functionName}:`, json);
 
     // Callable functions wrap result in 'result' field.
-    // Sometimes Genkit might wrap it differently, so we check for both.
-    const result = json.result !== undefined ? json.result : json.data;
+    // Genkit/Firebase functions can sometimes have nested structures like { result: { data: ... } }.
+    let result = json.result !== undefined ? json.result : json.data;
+
+    // Deeply unwrap if nested result/data structure exists
+    while (result && typeof result === 'object' && (result.result !== undefined || result.data !== undefined)) {
+      result = result.result !== undefined ? result.result : result.data;
+    }
+
     return result !== undefined ? result : json;
   } catch (error) {
     console.error(
@@ -88,6 +94,7 @@ const analyzeImageWithFirebase = async (
   try {
     const data = await callFirebaseFunction("analyzeImage", {
       image: imageUrl,
+      image_url: imageUrl,
       include_cleaned_image: includeCleanedImage,
     });
     return data;
@@ -147,7 +154,7 @@ export const wardrobeRouter = createTRPCRouter({
       const finalMaterial = material || analysisData?.material || "OTHER";
       const finalPatternDescription =
         patternDescription || analysisData?.patternDescription || "";
-      const cleanedImage = analysisData?.cleanedImageUrl || image;
+      const cleanedImage = analysisData?.cleanedImage || analysisData?.cleanedImageUrl || image;
 
       try {
         const newItem = await prisma.clothingItem.create({
@@ -267,7 +274,7 @@ export const wardrobeRouter = createTRPCRouter({
           pattern: data.pattern as ClothingPattern,
           material: data.material as ClothingMaterial,
           patternDescription: data.patternDescription || "",
-          cleanedImageUrl: data.cleanedImageUrl,
+          cleanedImageUrl: data.cleanedImage || data.cleanedImageUrl,
           fabric: data.fabric || "",
           designPattern: data.designPattern || "",
           style: data.style || "",
