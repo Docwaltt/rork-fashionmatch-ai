@@ -44,6 +44,8 @@ export default function WardrobeScreen() {
   const { userProfile } = useAuth();
   const [selectedItem, setSelectedItem] = useState<ClothingItem | null>(null);
   const [showStyleModal, setShowStyleModal] = useState<boolean>(false);
+  const [showReferenceModal, setShowReferenceModal] = useState<boolean>(false);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [editCategory, setEditCategory] = useState<ClothingCategory | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -98,7 +100,8 @@ export default function WardrobeScreen() {
       router.push(`/styling?event=${eventId}&selectedItemId=${styleWithItem.id}` as any);
       setStyleWithItem(null);
     } else {
-      router.push(`/styling?event=${eventId}` as any);
+      setSelectedEventId(eventId);
+      setShowReferenceModal(true);
     }
   };
 
@@ -395,6 +398,48 @@ export default function WardrobeScreen() {
                         <Text style={styles.detailValue}>{selectedItem.pattern}</Text>
                       </View>
                     )}
+
+                    {selectedItem.style && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>STYLE</Text>
+                        <Text style={styles.detailValue}>{selectedItem.style}</Text>
+                      </View>
+                    )}
+
+                    {selectedItem.texture && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>TEXTURE</Text>
+                        <Text style={styles.detailValue}>{selectedItem.texture}</Text>
+                      </View>
+                    )}
+
+                    {selectedItem.silhouette && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>SILHOUETTE</Text>
+                        <Text style={styles.detailValue}>{selectedItem.silhouette}</Text>
+                      </View>
+                    )}
+
+                    {selectedItem.patternDescription && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>PATTERN DESCRIPTION</Text>
+                        <Text style={styles.detailValue}>{selectedItem.patternDescription}</Text>
+                      </View>
+                    )}
+
+                    {selectedItem.materialType && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>MATERIAL TYPE</Text>
+                        <Text style={styles.detailValue}>{selectedItem.materialType}</Text>
+                      </View>
+                    )}
+
+                    {selectedItem.hasPattern !== undefined && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>HAS PATTERN</Text>
+                        <Text style={styles.detailValue}>{selectedItem.hasPattern ? "Yes" : "No"}</Text>
+                      </View>
+                    )}
                     
                     <Text style={styles.modalDate}>
                       Added {new Date(selectedItem.addedAt).toLocaleDateString()}
@@ -495,7 +540,7 @@ export default function WardrobeScreen() {
               <Text style={styles.styleModalSubtitle}>
                 {styleWithItem ? `Style your ${styleWithItem.category} for...` : "Where are you going today?"}
               </Text>
-              <ScrollView style={styles.eventList}>
+              <ScrollView style={styles.eventList} showsVerticalScrollIndicator={false}>
                 {EVENT_TYPES.map((event) => (
                   <TouchableOpacity
                     key={event.id}
@@ -511,6 +556,62 @@ export default function WardrobeScreen() {
                     </View>
                   </TouchableOpacity>
                 ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={showReferenceModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowReferenceModal(false)}
+        >
+          <View style={styles.styleModalOverlay}>
+            <Pressable
+              style={styles.styleModalBackdrop}
+              onPress={() => setShowReferenceModal(false)}
+            />
+            <View style={styles.styleModalContent}>
+              <View style={styles.styleModalHandle} />
+              <Text style={styles.styleModalTitle}>SELECT REFERENCE</Text>
+              <Text style={styles.styleModalSubtitle}>
+                Pick a piece to style around, or let AI choose.
+              </Text>
+
+              <TouchableOpacity
+                style={styles.randomSelectionButton}
+                onPress={() => {
+                  setShowReferenceModal(false);
+                  router.push(`/styling?event=${selectedEventId}` as any);
+                }}
+              >
+                <LinearGradient
+                  colors={[Colors.gold[300], Colors.gold[500]]}
+                  style={styles.randomSelectionGradient}
+                >
+                  <Sparkles size={20} color={Colors.richBlack} />
+                  <Text style={styles.randomSelectionText}>LET AI SELECT (RANDOM)</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <Text style={styles.selectionDivider}>OR CHOOSE FROM WARDROBE</Text>
+
+              <ScrollView style={styles.referenceList} showsVerticalScrollIndicator={false}>
+                <View style={styles.referenceGrid}>
+                  {items.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.referenceItem}
+                      onPress={() => {
+                        setShowReferenceModal(false);
+                        router.push(`/styling?event=${selectedEventId}&selectedItemId=${item.id}` as any);
+                      }}
+                    >
+                      <Image source={{ uri: item.imageUri }} style={styles.referenceImage} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </ScrollView>
             </View>
           </View>
@@ -1053,5 +1154,51 @@ const styles = StyleSheet.create({
   },
   arrowContainer: {
     opacity: 0.5,
+  },
+  randomSelectionButton: {
+    marginBottom: 24,
+    borderRadius: 0,
+    overflow: 'hidden',
+  },
+  randomSelectionGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingVertical: 16,
+  },
+  randomSelectionText: {
+    color: Colors.richBlack,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  selectionDivider: {
+    fontSize: 10,
+    color: Colors.gray[500],
+    letterSpacing: 2,
+    textAlign: 'center',
+    marginBottom: 20,
+    fontWeight: '600',
+  },
+  referenceList: {
+    maxHeight: 400,
+  },
+  referenceGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingBottom: 20,
+  },
+  referenceItem: {
+    width: (width - 48 - 24) / 4,
+    height: ((width - 48 - 24) / 4) * 1.2,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.gray[100],
+  },
+  referenceImage: {
+    width: '100%',
+    height: '100%',
   },
 });

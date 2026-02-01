@@ -167,9 +167,9 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
     return downloadUrl;
   };
 
-  const addItem = (item: Omit<ClothingItem, "userId">) => {
+  const addItem = async (item: Omit<ClothingItem, "userId">) => {
     console.log('[WardrobeContext] Adding item:', item.id, item.category);
-    addItemMutation.mutate(item);
+    return await addItemMutation.mutateAsync(item);
   };
 
   const removeItem = (id: string) => {
