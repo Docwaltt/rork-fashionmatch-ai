@@ -1,6 +1,6 @@
-import { onCallGenkit } from 'firebase-functions/https';
+import { onCallGenkit } from 'firebase-functions/v2/https';
 import { onRequest } from 'firebase-functions/v2/https';
-import { processClothing } from './genkit.js';
+import { processClothing, generateOutfits } from './genkit.js';
 
 // 1. Callable Function (for direct usage from App via SDK)
 export const analyzeImage = onCallGenkit({
@@ -8,6 +8,13 @@ export const analyzeImage = onCallGenkit({
   timeoutSeconds: 300,
   region: 'us-central1'
 }, processClothing);
+
+// Export generateOutfits as a callable function
+export const generateOutfitsFn = onCallGenkit({
+  memory: '2GiB' as any,
+  timeoutSeconds: 300,
+  region: 'us-central1'
+}, generateOutfits);
 
 // 2. HTTP Function (for usage via tRPC backend or raw HTTP fetch)
 export const processClothingFn = onRequest({
@@ -56,15 +63,8 @@ export const processClothingFn = onRequest({
 
   try {
     // Invoke the Genkit flow directly
-    const result = await processClothing(input);
+    const result = await processClothing.run(input);
     
-    // Check if result contains an error object returned by the flow
-    if (result && result.error) {
-       console.error("Flow returned error:", result.error);
-       res.status(500).json(result);
-       return;
-    }
-
     res.status(200).json(result);
   } catch (error: any) {
     console.error("Error in processClothingFn execution:", error);

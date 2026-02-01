@@ -29,6 +29,12 @@ const EVENT_LABELS: Record<string, string> = {
   workout: "Workout",
 };
 
+interface OutfitSuggestion {
+  title: string;
+  description: string;
+  items: string[];
+}
+
 export default function StylingScreen() {
   const { event, selectedItemId, selectedItemIds } = useLocalSearchParams<{ event: string; selectedItemId?: string; selectedItemIds?: string }>();
   const { items } = useWardrobe();
@@ -39,11 +45,13 @@ export default function StylingScreen() {
   const multipleSelectedItems = selectedItemIds ? selectedItemIds.split(',').map(id => items.find(i => i.id === id)).filter(Boolean) as ClothingItem[] : [];
 
   const generateOutfitMutation = trpc.wardrobe.generateOutfit.useMutation({
-     onSuccess: (data) => {
-        if (data && data.length > 0) {
-          const firstOutfit = data[0];
+     onSuccess: (data: any) => {
+        // Explicitly cast data to the expected type
+        const suggestions = data as OutfitSuggestion[];
+        if (suggestions && suggestions.length > 0) {
+          const firstOutfit = suggestions[0];
           setReasoning(firstOutfit.description);
-          const outfitItems = firstOutfit.items.map(itemId => items.find(item => item.id === itemId)).filter(Boolean) as ClothingItem[];
+          const outfitItems = firstOutfit.items.map((itemId: string) => items.find(item => item.id === itemId)).filter(Boolean) as ClothingItem[];
           setSuggestedOutfit(outfitItems);
         }
      },
@@ -61,22 +69,6 @@ export default function StylingScreen() {
 
 
   const handleGenerateOutfit = () => {
-    // If specific items were selected, we might want to prioritize them or ONLY use them.
-    // For now, let's pass the whole wardrobe but maybe the prompt could be adjusted to prioritize selected items?
-    // The current backend prompt takes the whole wardrobe and makes outfits.
-    // If we want to force usage of selected items, we should filter the wardrobe passed to the AI?
-    // OR we pass the whole wardrobe and let AI decide, but maybe that ignores the user's selection.
-    
-    // If the user manually selected items, let's pass ONLY those items + maybe some essentials?
-    // Actually, if they selected items, they probably want an outfit made FROM those items or WITH those items.
-    // If we only pass those, the AI is limited.
-    // Let's stick to passing the full wardrobe for now, as the current backend logic is "create outfits from wardrobe".
-    // Wait, if I selected a shirt and pants, I want to know if they go together.
-    
-    // Given the prompt "style the user based on the option of the clothing picked",
-    // if `selectedItemIds` is present, let's filter the input wardrobe to ONLY those items if there are enough (e.g. > 1),
-    // OR if it's just one item (via `selectedItemId`), we pass the whole wardrobe to find matches.
-    
     let wardrobeToUse = items;
     
     if (multipleSelectedItems.length > 1) {

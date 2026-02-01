@@ -38,6 +38,7 @@ export type ClothingItem = {
   thumbnailUri?: string; // New field for thumbnails
   material?: string; // Added to match user request
   pattern?: string; // Added to match user request
+  isBackgroundRemoved?: boolean; // Added to fix type error
 };
 
 export type OutfitSuggestion = {

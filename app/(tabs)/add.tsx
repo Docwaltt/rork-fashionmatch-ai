@@ -123,7 +123,7 @@ export default function AddItemScreen() {
       if (data.category) {
         const validCategories = categories.map(c => c.id);
         const returnedCategory = data.category as ClothingCategory;
-        if (validCategories.includes(returnedCategory)) {
+        if (validCategories.includes(returnedCategory as any)) {
           setSelectedCategory(returnedCategory);
         }
       }

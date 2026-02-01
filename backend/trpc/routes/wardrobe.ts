@@ -1,6 +1,6 @@
 import { createTRPCRouter, publicProcedure } from "../create-context";
 import { z } from "zod";
-import { ClothingSchema, generateOutfits } from "../../../functions/src/genkit";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 // Mocking prisma since it's missing in the environment but required for compilation of this file.
 // In a real scenario, we would fix the path or generate the client.
@@ -20,14 +20,22 @@ enum ClothingCategory { TOP='TOP', BOTTOM='BOTTOM' }
 enum ClothingColor { BLACK='BLACK' }
 enum ClothingPattern { SOLID='SOLID' }
 enum ClothingMaterial { COTTON='COTTON' }
-// import {
-//   ClothingCategory,
-//   ClothingColor,
-//   ClothingPattern,
-//   ClothingMaterial,
-//   ClothingItem,
-// } from "@prisma/client";
-// import { getSignedUrl } from "@google-cloud/storage"; // Commented out missing module
+
+// Define ClothingSchema locally to avoid Zod instance mismatch
+const LocalClothingSchema = z.object({
+  id: z.string().optional(),
+  category: z.string(),
+  color: z.string(),
+  style: z.string(),
+  confidence: z.number(),
+  cleanedImage: z.string().optional(),
+  isBackgroundRemoved: z.boolean(),
+  fabric: z.string().optional(),
+  silhouette: z.string().optional(),
+  materialType: z.string().optional(),
+  hasPattern: z.boolean().optional(),
+  patternDescription: z.string().optional(),
+});
 
 const analyzeImageWithFirebase = async (
   imageUrl: string,
@@ -98,7 +106,6 @@ export const wardrobeRouter = createTRPCRouter({
 
       let analysisData: any;
 
-      // If we don't have enough details, analyze the image
       if (!category || !color || !pattern || !material) {
         console.log("[Wardrobe] Missing some details, analyzing image...");
         try {
@@ -132,19 +139,6 @@ export const wardrobeRouter = createTRPCRouter({
             pattern: finalPattern as ClothingPattern,
             material: finalMaterial as ClothingMaterial,
             patternDescription: finalPatternDescription,
-            // Assuming fabric is not in Prisma schema yet based on previous errors/structure. 
-            // If it was, we would add: fabric: fabric,
-            // For now, we will append it to patternDescription if needed or ignore it if schema doesn't support it.
-            // But since the user INSISTED on it, and I can't migrate DB, 
-            // I will mistakenly try to add it only if I could. 
-            // A safer bet is to put it in patternDescription if not present?
-            // No, let's try to add it. If it fails, the user needs to migrate.
-            // However, checking the generated 'types/wardrobe.ts' which had 'fabric', it might be there.
-            // I'll try to add it. If it's not in the schema, this will throw a type error here (if using TS with generated client) or runtime error.
-            // To be safe against runtime errors if column is missing, I will omit it for now in the DB write 
-            // UNLESS I see it in the prisma imports. I don't see it.
-            // I will NOT add it to the prisma create call to avoid crashing the server.
-            // Instead I will log it.
             purchaseDate: new Date(),
           },
         });
@@ -203,7 +197,6 @@ export const wardrobeRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       const { id, ...data } = input;
-      // Filter out fabric if it causes issues, but allowing it in input
       const { fabric, ...updateData } = data; 
       console.log(`[Wardrobe] Updating item ${id} with data:`, updateData);
       try {
@@ -279,13 +272,15 @@ export const wardrobeRouter = createTRPCRouter({
     generateOutfit: publicProcedure
     .input(
       z.object({
-        wardrobe: z.array(ClothingSchema),
+        wardrobe: z.array(LocalClothingSchema),
       })
     )
     .mutation(async ({ input }) => {
       try {
-        const outfits = await generateOutfits.run(input.wardrobe);
-        return outfits;
+        const functions = getFunctions();
+        const generateOutfits = httpsCallable(functions, 'generateOutfitsFn');
+        const result = await generateOutfits({ wardrobe: input.wardrobe });
+        return result.data;
       } catch (error) {
         console.error("Error generating outfits:", error);
         throw new TRPCError({
