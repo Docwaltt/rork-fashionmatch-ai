@@ -1,15 +1,26 @@
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
+import { defineSecret } from 'firebase-functions/params';
 import type { Request } from 'firebase-functions/v2/https';
 import type { Response } from 'express';
 import { processClothing, generateOutfits } from './genkit.js';
+
+// Define Secrets
+const googleGenAiApiKey = defineSecret('GOOGLE_GENAI_API_KEY');
+const clipdropApiKey = defineSecret('CLIPDROP_API_KEY');
+const googleServiceAccountEmail = defineSecret('GOOGLE_SERVICE_ACCOUNT_EMAIL');
+const googlePrivateKey = defineSecret('GOOGLE_PRIVATE_KEY');
 
 // 1. Callable Function (for direct usage from App via SDK)
 export const analyzeImage = onCall({
   memory: '2GiB',
   timeoutSeconds: 300,
-  region: 'us-central1'
+  region: 'us-central1',
+  secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey], // Bind secrets
 }, async (request) => {
   try {
+    // Note: processClothing expects the raw input, not wrapped in 'data' if passed directly?
+    // onCall passes 'request.data' which is the payload.
+    // processClothing flow expects an object with 'imgData' or 'image' etc.
     const result = await processClothing.run(request.data);
     return result;
   } catch (error: any) {
@@ -21,7 +32,8 @@ export const analyzeImage = onCall({
 export const generateOutfitsFn = onCall({
   memory: '2GiB',
   timeoutSeconds: 300,
-  region: 'us-central1'
+  region: 'us-central1',
+  secrets: [googleGenAiApiKey, googleServiceAccountEmail, googlePrivateKey], // Bind secrets
 }, async (request) => {
   try {
     const result = await generateOutfits.run(request.data);
@@ -33,10 +45,11 @@ export const generateOutfitsFn = onCall({
 
 // 2. HTTP Function (for usage via tRPC backend or raw HTTP fetch)
 export const processClothingFn = onRequest({
-  memory: '4GiB', // Increased memory for background removal
+  memory: '4GiB',
   timeoutSeconds: 300,
   region: 'us-central1',
-  cors: true, 
+  cors: true,
+  secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey], // Bind secrets
 }, async (req: Request, res: Response) => {
   // Debug Logging
   console.log("Request received. Headers:", JSON.stringify(req.headers));
