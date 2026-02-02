@@ -122,23 +122,7 @@ export const processClothing = ai.defineFlow(
       } catch (clipdropError: any) {
         console.error("Clipdrop failed (or key missing):", clipdropError.message);
         
-        // Optional: Fallback to @imgly/background-removal-node if Clipdrop fails?
-        // User requested Clipdrop as default. We can try fallback if we want robustness.
-        try {
-          console.log("Falling back to @imgly/background-removal-node...");
-          const { removeBackground } = await import('@imgly/background-removal-node');
-          
-          const blobOutput = await removeBackground(inputBuffer);
-          const arrayBuffer = await blobOutput.arrayBuffer();
-          const bufferOutput = Buffer.from(arrayBuffer);
-          
-          cleanedImageBase64 = `data:image/png;base64,${bufferOutput.toString('base64')}`;
-          console.log("Background removed successfully via @imgly.");
-          imageForGemini = cleanedImageBase64;
-          isBackgroundRemoved = true;
-        } catch (imglyError: any) {
-           console.error("Fallback @imgly also failed:", imglyError);
-        }
+        console.log("Background removal skipped - Clipdrop is the only supported method.");
       }
     }
 

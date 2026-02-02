@@ -1,20 +1,35 @@
-import { onCallGenkit } from 'firebase-functions/v2/https';
-import { onRequest } from 'firebase-functions/v2/https';
+import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
+import type { Request } from 'firebase-functions/v2/https';
+import type { Response } from 'express';
 import { processClothing, generateOutfits } from './genkit.js';
 
 // 1. Callable Function (for direct usage from App via SDK)
-export const analyzeImage = onCallGenkit({
-  memory: '2GiB' as any, // Genkit wrapper might have strict types, check if 4GiB is allowed here
+export const analyzeImage = onCall({
+  memory: '2GiB',
   timeoutSeconds: 300,
   region: 'us-central1'
-}, processClothing);
+}, async (request) => {
+  try {
+    const result = await processClothing.run(request.data);
+    return result;
+  } catch (error: any) {
+    throw new HttpsError('internal', error.message);
+  }
+});
 
 // Export generateOutfits as a callable function
-export const generateOutfitsFn = onCallGenkit({
-  memory: '2GiB' as any,
+export const generateOutfitsFn = onCall({
+  memory: '2GiB',
   timeoutSeconds: 300,
   region: 'us-central1'
-}, generateOutfits);
+}, async (request) => {
+  try {
+    const result = await generateOutfits.run(request.data);
+    return result;
+  } catch (error: any) {
+    throw new HttpsError('internal', error.message);
+  }
+});
 
 // 2. HTTP Function (for usage via tRPC backend or raw HTTP fetch)
 export const processClothingFn = onRequest({
@@ -22,7 +37,7 @@ export const processClothingFn = onRequest({
   timeoutSeconds: 300,
   region: 'us-central1',
   cors: true, 
-}, async (req, res) => {
+}, async (req: Request, res: Response) => {
   // Debug Logging
   console.log("Request received. Headers:", JSON.stringify(req.headers));
   console.log("Body type:", typeof req.body);
