@@ -1,5 +1,7 @@
 import { createTRPCRouter, publicProcedure } from "../create-context";
 import { z } from "zod";
+import { functions } from "../../../lib/firebase"; // Import the initialized functions instance
+import { httpsCallable } from "firebase/functions";
 
 // Mocking prisma since it's missing in the environment but required for compilation of this file.
 // In a real scenario, we would fix the path or generate the client.
@@ -36,74 +38,6 @@ const LocalClothingSchema = z.object({
   patternDescription: z.string().optional(),
 });
 
-const callFirebaseFunction = async (functionName: string, data: any) => {
-  const projectId =
-    process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "dressya-6ff56";
-  const region = "us-central1";
-  const url = `https://${region}-${projectId}.cloudfunctions.net/${functionName}`;
-
-  console.log(`[Wardrobe] Calling Firebase function: ${url}`);
-
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ data }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(
-        `[Wardrobe] Firebase function ${functionName} returned an error: ${response.status} ${errorText}`
-      );
-      throw new Error(
-        `Firebase function failed with status: ${response.status}`
-      );
-    }
-
-    const json = await response.json();
-    console.log(`[Wardrobe] Received response from ${functionName}:`, json);
-
-    // Callable functions wrap result in 'result' field.
-    // Genkit/Firebase functions can sometimes have nested structures like { result: { data: ... } }.
-    let result = json.result !== undefined ? json.result : json.data;
-
-    // Deeply unwrap if nested result/data structure exists
-    while (result && typeof result === 'object' && (result.result !== undefined || result.data !== undefined)) {
-      result = result.result !== undefined ? result.result : result.data;
-    }
-
-    return result !== undefined ? result : json;
-  } catch (error) {
-    console.error(
-      `[Wardrobe] Error calling Firebase function ${functionName}:`,
-      error
-    );
-    throw error;
-  }
-};
-
-const analyzeImageWithFirebase = async (
-  imageUrl: string,
-  includeCleanedImage: boolean = false
-) => {
-  console.log(
-    `[Wardrobe] Analyzing image with Firebase: ${imageUrl}, includeCleanedImage: ${includeCleanedImage}`
-  );
-
-  try {
-    const data = await callFirebaseFunction("analyzeImage", {
-      image: imageUrl,
-      image_url: imageUrl,
-      include_cleaned_image: includeCleanedImage,
-    });
-    return data;
-  } catch (error) {
-    console.error("[Wardrobe] Error calling Firebase function:", error);
-    throw new Error("Failed to analyze image with Firebase.");
-  }
-};
-
 export const wardrobeRouter = createTRPCRouter({
   create: publicProcedure
     .input(
@@ -131,12 +65,22 @@ export const wardrobeRouter = createTRPCRouter({
         fabric,
       } = input;
 
+      // Check if we need to analyze the image
       let analysisData: any;
-
       if (!category || !color || !pattern || !material) {
         console.log("[Wardrobe] Missing some details, analyzing image...");
         try {
-          analysisData = await analyzeImageWithFirebase(image, true);
+          // Use the 'analyzeImage' Cloud Function
+          // Note: The function name in index.ts is 'analyzeImage', which wraps 'processClothing'.
+          // 'processClothing' expects 'imgData' or 'image' or 'imageBase64'.
+          const analyzeImage = httpsCallable(functions, 'analyzeImage');
+          const result = await analyzeImage({ imgData: image });
+          analysisData = result.data;
+          
+          if (!analysisData || typeof analysisData !== 'object') {
+             throw new Error("Invalid analysis result");
+          }
+
         } catch (error) {
           console.error("[Wardrobe] Image analysis failed:", error);
           throw new TRPCError({
@@ -154,7 +98,7 @@ export const wardrobeRouter = createTRPCRouter({
       const finalMaterial = material || analysisData?.material || "OTHER";
       const finalPatternDescription =
         patternDescription || analysisData?.patternDescription || "";
-      const cleanedImage = analysisData?.cleanedImage || analysisData?.cleanedImageUrl || image;
+      const cleanedImage = analysisData?.cleanedImage || image; // Note: Genkit returns 'cleanedImage'
 
       try {
         const newItem = await prisma.clothingItem.create({
@@ -264,28 +208,35 @@ export const wardrobeRouter = createTRPCRouter({
   analyze: publicProcedure
     .input(z.object({ imageUrl: z.string(), gender: z.string().optional() }))
     .mutation(async ({ input }) => {
-      console.log("[Wardrobe] Received image for analysis:", input.imageUrl);
+      console.log("[Wardrobe] Received image for analysis");
       try {
-        const data = await analyzeImageWithFirebase(input.imageUrl, true);
+        // Use the 'analyzeImage' Cloud Function directly via SDK
+        const analyzeImage = httpsCallable(functions, 'analyzeImage');
+        // 'processClothing' flow expects 'imgData' (or aliases handled in index.ts)
+        const result = await analyzeImage({ imgData: input.imageUrl });
+        const data = result.data as any;
 
-        const result = {
+        // Map the result to our expected structure
+        // Note: The Genkit flow returns fields like 'category', 'color', 'cleanedImage' (not cleanedImageUrl)
+        const resultData = {
           category: data.category as ClothingCategory,
           color: data.color as ClothingColor,
-          pattern: data.pattern as ClothingPattern,
-          material: data.material as ClothingMaterial,
+          pattern: data.pattern as ClothingPattern, // Note: Schema might not return 'pattern' field directly, check Genkit schema
+          // Genkit schema has: category, color, style, confidence, cleanedImage, isBackgroundRemoved, fabric, silhouette, materialType, hasPattern, patternDescription
+          material: data.materialType as ClothingMaterial, // mapped from materialType
           patternDescription: data.patternDescription || "",
-          cleanedImageUrl: data.cleanedImage || data.cleanedImageUrl,
+          cleanedImageUrl: data.cleanedImage, // mapped from cleanedImage
           fabric: data.fabric || "",
-          designPattern: data.designPattern || "",
+          designPattern: data.patternDescription || "", // mapping patternDescription to designPattern if needed
           style: data.style || "",
-          texture: data.texture || "",
+          texture: data.fabric || "", // approximations if fields missing
           silhouette: data.silhouette || "",
           materialType: data.materialType || "",
           hasPattern: !!data.hasPattern,
         };
 
-        console.log("[Wardrobe] Analysis successful, returning data:", result);
-        return result;
+        console.log("[Wardrobe] Analysis successful");
+        return resultData;
       } catch (error) {
         console.error("[Wardrobe] Analysis mutation failed:", error);
         throw new TRPCError({
@@ -304,11 +255,28 @@ export const wardrobeRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
+        // Use the 'generateOutfitsFn' Cloud Function
+        const generateOutfits = httpsCallable(functions, 'generateOutfitsFn');
+        
         console.log("[Wardrobe] Calling generateOutfitsFn with", input.wardrobe.length, "items");
-        const data = await callFirebaseFunction("generateOutfitsFn", input.wardrobe);
-        return data;
+        
+        // Pass the wardrobe array directly. 
+        // Note: index.ts 'generateOutfitsFn' is an onCallGenkit.
+        // It wraps the 'generateOutfits' flow which takes 'z.array(ClothingSchema)'.
+        // So we should pass the array directly as the argument to the callable.
+        const result = await generateOutfits(input.wardrobe);
+        
+        console.log("[Wardrobe] generateOutfitsFn result received");
+        return result.data;
       } catch (error: any) {
         console.error("Error generating outfits:", error);
+        if (error.code) {
+             console.error("Firebase Error Code:", error.code);
+        }
+        if (error.message) {
+             console.error("Firebase Error Message:", error.message);
+        }
+        
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to generate outfits.",

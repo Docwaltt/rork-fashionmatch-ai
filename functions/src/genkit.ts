@@ -29,7 +29,7 @@ const ai = genkit({
   model: googleAI.model('gemini-3-pro-preview'), // Kept as requested
 });
 
-// Helper function for Clipdrop API
+// Helper function for Clipdrop API - Force redeploy trigger
 async function removeBackgroundWithClipdrop(imageBuffer: Buffer): Promise<string> {
   const apiKey = process.env.CLIPDROP_API_KEY; 
   
@@ -230,7 +230,7 @@ export const generateOutfits = ai.defineFlow(
 
             **Instructions:**
             1.  **Analyze the Wardrobe:** Carefully review the list of available clothing items, paying attention to category, color, style, and pattern.
-            2.  **Search for Inspiration:** Use your knowledge of current fashion trends to generate stylish and coherent outfits. You can use Google Search to find up-to-date information on what's in style.
+            2.  **Search for Inspiration:** Use your knowledge of current fashion trends to generate stylish and coherent outfits.
             3.  **Create Outfits:** Combine the items into complete outfits. Each outfit should have a top, a bottom, and optionally, shoes and accessories if they are available in the wardrobe.
             4.  **Provide a Title and Description:** For each outfit, create a catchy title and a brief description that explains the style and occasion for the outfit.
             5.  **Return the Outfit:** Return a list of outfit suggestions, each with a title, description, and the IDs of the items that make up the outfit.
