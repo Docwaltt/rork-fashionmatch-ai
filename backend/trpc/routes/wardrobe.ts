@@ -71,21 +71,27 @@ export const wardrobeRouter = createTRPCRouter({
         console.log("[Wardrobe] Missing some details, analyzing image...");
         try {
           // Use the 'analyzeImage' Cloud Function
-          // Note: The function name in index.ts is 'analyzeImage', which wraps 'processClothing'.
-          // 'processClothing' expects 'imgData' or 'image' or 'imageBase64'.
           const analyzeImage = httpsCallable(functions, 'analyzeImage');
           const result = await analyzeImage({ imgData: image });
           analysisData = result.data;
           
+          console.log("[Wardrobe] Analysis result data:", JSON.stringify(analysisData).substring(0, 200));
+
           if (!analysisData || typeof analysisData !== 'object') {
-             throw new Error("Invalid analysis result");
+             console.error("[Wardrobe] Invalid analysis result structure:", analysisData);
+             throw new Error("Invalid analysis result from AI");
           }
 
-        } catch (error) {
+        } catch (error: any) {
           console.error("[Wardrobe] Image analysis failed:", error);
+          if (error.code) console.error("Firebase Error Code:", error.code);
+          if (error.message) console.error("Firebase Error Message:", error.message);
+          if (error.details) console.error("Firebase Error Details:", error.details);
+          
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to analyze image.",
+            message: `Failed to analyze image: ${error.message}`,
+            cause: error,
           });
         }
       } else {
@@ -215,6 +221,8 @@ export const wardrobeRouter = createTRPCRouter({
         // 'processClothing' flow expects 'imgData' (or aliases handled in index.ts)
         const result = await analyzeImage({ imgData: input.imageUrl });
         const data = result.data as any;
+        
+        console.log("[Wardrobe] Analysis result data:", JSON.stringify(data).substring(0, 200));
 
         // Map the result to our expected structure
         // Note: The Genkit flow returns fields like 'category', 'color', 'cleanedImage' (not cleanedImageUrl)
@@ -237,12 +245,16 @@ export const wardrobeRouter = createTRPCRouter({
 
         console.log("[Wardrobe] Analysis successful");
         return resultData;
-      } catch (error) {
+      } catch (error: any) {
         console.error("[Wardrobe] Analysis mutation failed:", error);
+        if (error.code) console.error("Firebase Error Code:", error.code);
+        if (error.message) console.error("Firebase Error Message:", error.message);
+        if (error.details) console.error("Firebase Error Details:", error.details);
+
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message:
-            "An error occurred during image analysis. Please try again later.",
+            `An error occurred during image analysis: ${error.message}`,
         });
       }
     }),

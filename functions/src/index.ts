@@ -15,16 +15,22 @@ export const analyzeImage = onCall({
   memory: '2GiB',
   timeoutSeconds: 300,
   region: 'us-central1',
-  secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey], // Bind secrets
+  invoker: 'public', // Allow unauthenticated access
+  secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey],
 }, async (request) => {
   try {
-    // Note: processClothing expects the raw input, not wrapped in 'data' if passed directly?
-    // onCall passes 'request.data' which is the payload.
-    // processClothing flow expects an object with 'imgData' or 'image' etc.
+    console.log("analyzeImage called with data keys:", Object.keys(request.data || {}));
+    
+    // Log if secrets are available (without logging values)
+    console.log("GOOGLE_GENAI_API_KEY available:", !!googleGenAiApiKey.value());
+    console.log("CLIPDROP_API_KEY available:", !!clipdropApiKey.value());
+    
     const result = await processClothing.run(request.data);
+    console.log("processClothing result:", JSON.stringify(result).substring(0, 200) + "...");
     return result;
   } catch (error: any) {
-    throw new HttpsError('internal', error.message);
+    console.error("analyzeImage error:", error);
+    throw new HttpsError('internal', error.message, error);
   }
 });
 
@@ -33,13 +39,16 @@ export const generateOutfitsFn = onCall({
   memory: '2GiB',
   timeoutSeconds: 300,
   region: 'us-central1',
-  secrets: [googleGenAiApiKey, googleServiceAccountEmail, googlePrivateKey], // Bind secrets
+  invoker: 'public', // Allow unauthenticated access
+  secrets: [googleGenAiApiKey, googleServiceAccountEmail, googlePrivateKey],
 }, async (request) => {
   try {
+    console.log("generateOutfitsFn called with data keys:", Object.keys(request.data || {}));
     const result = await generateOutfits.run(request.data);
     return result;
   } catch (error: any) {
-    throw new HttpsError('internal', error.message);
+    console.error("generateOutfitsFn error:", error);
+    throw new HttpsError('internal', error.message, error);
   }
 });
 
@@ -49,7 +58,8 @@ export const processClothingFn = onRequest({
   timeoutSeconds: 300,
   region: 'us-central1',
   cors: true,
-  secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey], // Bind secrets
+  invoker: 'public', // Allow unauthenticated access
+  secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey],
 }, async (req: Request, res: Response) => {
   // Debug Logging
   console.log("Request received. Headers:", JSON.stringify(req.headers));
