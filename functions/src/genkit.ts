@@ -26,10 +26,12 @@ export const ClothingSchema = z.object({
 
 const ai = genkit({
   plugins: [googleAI()], 
-  model: googleAI.model('gemini-3-pro-preview'), // Kept as requested
+  // Using gemini-1.5-pro for best visual analysis capabilities.
+  // This is the "Pro" class model required for high-quality extraction.
+  model: googleAI.model('gemini-1.5-pro'), 
 });
 
-// Helper function for Clipdrop API - Force redeploy trigger
+// Helper function for Clipdrop API
 async function removeBackgroundWithClipdrop(imageBuffer: Buffer): Promise<string> {
   const apiKey = process.env.CLIPDROP_API_KEY; 
   
@@ -122,7 +124,23 @@ export const processClothing = ai.defineFlow(
       } catch (clipdropError: any) {
         console.error("Clipdrop failed (or key missing):", clipdropError.message);
         
-        console.log("Background removal skipped - Clipdrop is the only supported method.");
+        // Optional: Fallback to @imgly/background-removal-node if Clipdrop fails?
+        // User requested Clipdrop as default. We can try fallback if we want robustness.
+        try {
+          console.log("Falling back to @imgly/background-removal-node...");
+          const { removeBackground } = await import('@imgly/background-removal-node');
+          
+          const blobOutput = await removeBackground(inputBuffer);
+          const arrayBuffer = await blobOutput.arrayBuffer();
+          const bufferOutput = Buffer.from(arrayBuffer);
+          
+          cleanedImageBase64 = `data:image/png;base64,${bufferOutput.toString('base64')}`;
+          console.log("Background removed successfully via @imgly.");
+          imageForGemini = cleanedImageBase64;
+          isBackgroundRemoved = true;
+        } catch (imglyError: any) {
+           console.error("Fallback @imgly also failed:", imglyError);
+        }
       }
     }
 
@@ -148,14 +166,14 @@ export const processClothing = ai.defineFlow(
             Analyze the provided clothing image deeply.
             
             MANDATORY FIELDS TO EXTRACT:
-            1. fabric: Identify the texture (e.g., ribbed, smooth, knitted).
-            2. materialType: Identify the material (e.g., Cotton, Polyester, Denim).
+            1. fabric: Identify the texture (e.g., ribbed, smooth, knitted, denim).
+            2. materialType: Identify the material (e.g., Cotton, Polyester, Denim, Leather).
             3. hasPattern: Boolean true/false.
             4. patternDescription: Describe the pattern if present (or "Solid" if none).
-            5. category: The specific item type.
+            5. category: The specific item type (e.g., T-Shirt, Jeans, Dress, Sneakers).
             6. color: Dominant color.
             
-            Return ALL fields in the JSON schema.
+            Return ALL fields in the JSON schema. Be verbose with 'fabric' and 'patternDescription'.
           `},
           { media: { url: imageForGemini } },
         ],
