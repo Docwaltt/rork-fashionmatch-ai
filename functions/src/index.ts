@@ -19,14 +19,22 @@ export const analyzeImage = onCall({
   secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey],
 }, async (request) => {
   try {
-    console.log("analyzeImage called with data keys:", Object.keys(request.data || {}));
+    console.log("analyzeImage called. Request data keys:", Object.keys(request.data || {}));
     
     // Log if secrets are available (without logging values)
     console.log("GOOGLE_GENAI_API_KEY available:", !!googleGenAiApiKey.value());
     console.log("CLIPDROP_API_KEY available:", !!clipdropApiKey.value());
     
+    // Check input payload structure
+    const input = request.data;
+    if (input && (input.imgData || input.image)) {
+        console.log("Image data present. Length:", (input.imgData || input.image).length);
+    } else {
+        console.warn("WARNING: No image data found in request!");
+    }
+
     const result = await processClothing.run(request.data);
-    console.log("processClothing result:", JSON.stringify(result).substring(0, 200) + "...");
+    console.log("processClothing result:", JSON.stringify(result).substring(0, 500) + "...");
     return result;
   } catch (error: any) {
     console.error("analyzeImage error:", error);
@@ -40,7 +48,7 @@ export const generateOutfitsFn = onCall({
   timeoutSeconds: 300,
   region: 'us-central1',
   invoker: 'public', // Allow unauthenticated access
-  secrets: [googleGenAiApiKey, googleServiceAccountEmail, googlePrivateKey],
+  secrets: [googleGenAiApiKey, googleServiceAccountEmail, googlePrivateKey], // Bind secrets
 }, async (request) => {
   try {
     console.log("generateOutfitsFn called with data keys:", Object.keys(request.data || {}));
@@ -59,7 +67,7 @@ export const processClothingFn = onRequest({
   region: 'us-central1',
   cors: true,
   invoker: 'public', // Allow unauthenticated access
-  secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey],
+  secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey], // Bind secrets
 }, async (req: Request, res: Response) => {
   // Debug Logging
   console.log("Request received. Headers:", JSON.stringify(req.headers));

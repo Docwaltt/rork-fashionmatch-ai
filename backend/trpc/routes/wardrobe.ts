@@ -32,6 +32,7 @@ const LocalClothingSchema = z.object({
   cleanedImage: z.string().optional(),
   isBackgroundRemoved: z.boolean(),
   fabric: z.string().optional(),
+  texture: z.string().optional(),
   silhouette: z.string().optional(),
   materialType: z.string().optional(),
   hasPattern: z.boolean().optional(),
@@ -70,9 +71,9 @@ export const wardrobeRouter = createTRPCRouter({
       if (!category || !color || !pattern || !material) {
         console.log("[Wardrobe] Missing some details, analyzing image...");
         try {
-          // Use the 'analyzeImage' Cloud Function
-          const analyzeImage = httpsCallable(functions, 'analyzeImage');
-          const result = await analyzeImage({ imgData: image });
+          // Use the 'processClothingFn' Cloud Function
+          const processClothing = httpsCallable(functions, 'processClothingFn');
+          const result = await processClothing({ imgData: image });
           analysisData = result.data;
           
           console.log("[Wardrobe] Analysis result data:", JSON.stringify(analysisData).substring(0, 200));
@@ -216,31 +217,17 @@ export const wardrobeRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       console.log("[Wardrobe] Received image for analysis");
       try {
-        // Use the 'analyzeImage' Cloud Function directly via SDK
-        const analyzeImage = httpsCallable(functions, 'analyzeImage');
-        // 'processClothing' flow expects 'imgData' (or aliases handled in index.ts)
-        const result = await analyzeImage({ imgData: input.imageUrl });
+        // Use the 'processClothingFn' Cloud Function directly via SDK
+        const processClothing = httpsCallable(functions, 'processClothingFn');
+        const result = await processClothing({ imgData: input.imageUrl });
         const data = result.data as any;
         
         console.log("[Wardrobe] Analysis result data:", JSON.stringify(data).substring(0, 200));
 
-        // Map the result to our expected structure
-        // Note: The Genkit flow returns fields like 'category', 'color', 'cleanedImage' (not cleanedImageUrl)
+        // Pass the entire data object through, and add the renamed cleanedImageUrl
         const resultData = {
-          category: data.category as ClothingCategory,
-          color: data.color as ClothingColor,
-          pattern: data.pattern as ClothingPattern, // Note: Schema might not return 'pattern' field directly, check Genkit schema
-          // Genkit schema has: category, color, style, confidence, cleanedImage, isBackgroundRemoved, fabric, silhouette, materialType, hasPattern, patternDescription
-          material: data.materialType as ClothingMaterial, // mapped from materialType
-          patternDescription: data.patternDescription || "",
-          cleanedImageUrl: data.cleanedImage, // mapped from cleanedImage
-          fabric: data.fabric || "",
-          designPattern: data.patternDescription || "", // mapping patternDescription to designPattern if needed
-          style: data.style || "",
-          texture: data.fabric || "", // approximations if fields missing
-          silhouette: data.silhouette || "",
-          materialType: data.materialType || "",
-          hasPattern: !!data.hasPattern,
+          ...data,
+          cleanedImageUrl: data.cleanedImage,
         };
 
         console.log("[Wardrobe] Analysis successful");

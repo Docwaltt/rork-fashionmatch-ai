@@ -8,6 +8,7 @@ export declare const ClothingSchema: z.ZodObject<{
     cleanedImage: z.ZodOptional<z.ZodString>;
     isBackgroundRemoved: z.ZodBoolean;
     fabric: z.ZodOptional<z.ZodString>;
+    texture: z.ZodOptional<z.ZodString>;
     silhouette: z.ZodOptional<z.ZodString>;
     materialType: z.ZodOptional<z.ZodString>;
     hasPattern: z.ZodOptional<z.ZodBoolean>;
@@ -21,6 +22,7 @@ export declare const ClothingSchema: z.ZodObject<{
     id?: string | undefined;
     cleanedImage?: string | undefined;
     fabric?: string | undefined;
+    texture?: string | undefined;
     silhouette?: string | undefined;
     materialType?: string | undefined;
     hasPattern?: boolean | undefined;
@@ -34,6 +36,7 @@ export declare const ClothingSchema: z.ZodObject<{
     id?: string | undefined;
     cleanedImage?: string | undefined;
     fabric?: string | undefined;
+    texture?: string | undefined;
     silhouette?: string | undefined;
     materialType?: string | undefined;
     hasPattern?: boolean | undefined;
@@ -62,6 +65,7 @@ export declare const generateOutfits: import("genkit").Action<z.ZodArray<z.ZodOb
     cleanedImage: z.ZodOptional<z.ZodString>;
     isBackgroundRemoved: z.ZodBoolean;
     fabric: z.ZodOptional<z.ZodString>;
+    texture: z.ZodOptional<z.ZodString>;
     silhouette: z.ZodOptional<z.ZodString>;
     materialType: z.ZodOptional<z.ZodString>;
     hasPattern: z.ZodOptional<z.ZodBoolean>;
@@ -75,6 +79,7 @@ export declare const generateOutfits: import("genkit").Action<z.ZodArray<z.ZodOb
     id?: string | undefined;
     cleanedImage?: string | undefined;
     fabric?: string | undefined;
+    texture?: string | undefined;
     silhouette?: string | undefined;
     materialType?: string | undefined;
     hasPattern?: boolean | undefined;
@@ -88,6 +93,7 @@ export declare const generateOutfits: import("genkit").Action<z.ZodArray<z.ZodOb
     id?: string | undefined;
     cleanedImage?: string | undefined;
     fabric?: string | undefined;
+    texture?: string | undefined;
     silhouette?: string | undefined;
     materialType?: string | undefined;
     hasPattern?: boolean | undefined;

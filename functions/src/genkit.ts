@@ -1,12 +1,17 @@
+
 import { genkit, z } from 'genkit';
 import { googleAI } from '@genkit-ai/google-genai';
 
-// Check for API Key availability
+// Enhanced logging to check for API keys at startup
 const apiKey = process.env.GOOGLE_GENAI_API_KEY || process.env.GOOGLE_API_KEY;
 if (!apiKey) {
-  console.warn("WARNING: GOOGLE_GENAI_API_KEY is not set in environment variables. Genkit may fail.");
+  console.warn("CRITICAL: GOOGLE_GENAI_API_KEY is not set.");
 } else {
-  console.log("GOOGLE_GENAI_API_KEY found (length: " + apiKey.length + ")");
+  console.log("GOOGLE_GENAI_API_KEY is configured.");
+}
+const clipdropApiKey = process.env.CLIPDROP_API_KEY;
+if (!clipdropApiKey) {
+    console.warn("WARNING: CLIPDROP_API_KEY is not set. Background removal will be skipped.");
 }
 
 export const ClothingSchema = z.object({
@@ -18,181 +23,115 @@ export const ClothingSchema = z.object({
   cleanedImage: z.string().optional().describe('Base64 string of the image with background removed'),
   isBackgroundRemoved: z.boolean().describe('Whether the background removal process was successful'),
   fabric: z.string().optional().describe('Fabric texture (e.g., knit, denim, silk, cotton, leather)'),
+  texture: z.string().optional().describe('Visual texture of the fabric (e.g., smooth, ribbed, fuzzy, bumpy)'),
   silhouette: z.string().optional().describe('Item silhouette (e.g., oversized, tailored, A-line, slim)'),
   materialType: z.string().optional().describe('Material of the cloth (e.g., Cotton, Polyester, Wool)'),
   hasPattern: z.boolean().optional().describe('Whether the cloth has patterns or not'),
   patternDescription: z.string().optional().describe('A description of the pattern if it exists (e.g., floral, striped, plaid)'),
 });
 
-const ai = genkit({
-  plugins: [googleAI()], 
-  // Using gemini-1.5-pro for best visual analysis capabilities.
-  // This is the "Pro" class model required for high-quality extraction.
-  model: googleAI.model('gemini-1.5-pro'), 
+const ai = genkit({ 
+  plugins: [googleAI()],
 });
 
-// Helper function for Clipdrop API
 async function removeBackgroundWithClipdrop(imageBuffer: Buffer): Promise<string> {
-  const apiKey = process.env.CLIPDROP_API_KEY; 
-  
-  if (!apiKey) {
-    throw new Error("CLIPDROP_API_KEY is not set in environment variables.");
-  }
-
-  // Create a Blob from the buffer (Node 20+)
-  // Cast to Uint8Array to avoid TS issues with SharedArrayBuffer
-  const blob = new Blob([new Uint8Array(imageBuffer)], { type: 'image/jpeg' });
+  if (!clipdropApiKey) throw new Error("CLIPDROP_API_KEY is not set.");
   
   const formData = new FormData();
-  formData.append('image_file', blob, 'image.jpg');
+  // Correctly create a Blob from the Buffer for Fetch API
+  formData.append('image_file', new Blob([new Uint8Array(imageBuffer)], { type: 'image/jpeg' }), 'image.jpg');
 
-  console.log("Sending request to Clipdrop API...");
+  console.log("LOG: Calling Clipdrop API...");
   const response = await fetch('https://clipdrop-api.co/remove-background/v1', {
     method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-    },
+    headers: { 'x-api-key': clipdropApiKey },
     body: formData,
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error(`Clipdrop API failed: ${response.status}`, errorText);
+    console.error(`LOG: Clipdrop API failed: ${response.status}`, errorText);
     throw new Error(`Clipdrop API failed: ${response.status} ${errorText}`);
   }
-
-  const arrayBuffer = await response.arrayBuffer();
-  const bufferOutput = Buffer.from(arrayBuffer);
   
-  return `data:image/png;base64,${bufferOutput.toString('base64')}`;
+  const arrayBuffer = await response.arrayBuffer();
+  console.log("LOG: Clipdrop API success. Received buffer of size:", arrayBuffer.byteLength);
+  return `data:image/png;base64,${Buffer.from(arrayBuffer).toString('base64')}`;
 }
 
 export const processClothing = ai.defineFlow(
   {
     name: 'processClothing',
-    inputSchema: z.any(), 
+    inputSchema: z.any(),
     outputSchema: z.any(),
   },
-  async (inputData) => {
-    let imageUri: string = "";
-    
-    if (typeof inputData === 'string') {
-      imageUri = inputData;
-    } else if (inputData && typeof inputData === 'object') {
-      imageUri = inputData.imgData || inputData.image || inputData.data || "";
-    }
+  async (inputData: any) => {
+    console.log("LOG: processClothing flow started. Received input type:", typeof inputData);
+    console.log("LOG: Raw input data:", JSON.stringify(inputData).substring(0, 200)); // Log first 200 chars
+
+    let imageUri = inputData?.imgData || inputData?.image || inputData?.data || (typeof inputData === 'string' ? inputData : "");
 
     if (!imageUri) {
-       console.error("No image data found.");
+       console.error("LOG: No image data found in input.");
        return { error: "No image data provided" };
     }
 
-    // Debug input snippet
-    console.log(`Input image starts with: ${imageUri.substring(0, 50)}...`);
+    console.log("LOG: Extracted image URI (first 100 chars):", imageUri.substring(0, 100));
 
-    let imageForGemini = imageUri;
     let cleanedImageBase64: string | undefined;
     let isBackgroundRemoved = false;
+    let imageForGemini = imageUri;
 
-    // Create Input Buffer for Background Removal
-    let inputBuffer: Buffer | null = null;
     try {
+      let inputBuffer: Buffer;
       if (imageUri.startsWith('http')) {
         const response = await fetch(imageUri);
-        const arrayBuffer = await response.arrayBuffer();
-        inputBuffer = Buffer.from(arrayBuffer);
+        inputBuffer = Buffer.from(await response.arrayBuffer());
       } else {
-        // Handle Base64
-        let base64Data = imageUri.replace(/^data:image\/\w+;base64,/, "");
-        base64Data = base64Data.replace(/\s/g, '');
-        inputBuffer = Buffer.from(base64Data, 'base64');
-        console.log(`Created buffer size: ${inputBuffer.length} bytes`);
+        inputBuffer = Buffer.from(imageUri.replace(/^data:image\/\w+;base64,/, ''), 'base64');
       }
-    } catch (e) {
-      console.error("Failed to create input buffer:", e);
+      console.log(`LOG: Created buffer of size ${inputBuffer.length} for background removal.`);
+
+      cleanedImageBase64 = await removeBackgroundWithClipdrop(inputBuffer);
+      isBackgroundRemoved = true;
+      imageForGemini = cleanedImageBase64;
+      console.log("LOG: Background removed. Using cleaned image for Gemini.");
+
+    } catch (error: any) {
+      console.error("LOG: Background removal failed. Using original image. Error:", error.message);
+      imageForGemini = imageUri; 
     }
 
-    // Background Removal Logic (Default: Clipdrop)
-    if (inputBuffer) {
-      try {
-        console.log("Attempting background removal with Clipdrop API...");
-        cleanedImageBase64 = await removeBackgroundWithClipdrop(inputBuffer);
-        console.log("Background removed successfully via Clipdrop. Output length:", cleanedImageBase64.length);
-        
-        imageForGemini = cleanedImageBase64;
-        isBackgroundRemoved = true;
-      } catch (clipdropError: any) {
-        console.error("Clipdrop failed (or key missing):", clipdropError.message);
-        
-        // Optional: Fallback to @imgly/background-removal-node if Clipdrop fails?
-        // User requested Clipdrop as default. We can try fallback if we want robustness.
-        try {
-          console.log("Falling back to @imgly/background-removal-node...");
-          const { removeBackground } = await import('@imgly/background-removal-node');
-          
-          const blobOutput = await removeBackground(inputBuffer);
-          const arrayBuffer = await blobOutput.arrayBuffer();
-          const bufferOutput = Buffer.from(arrayBuffer);
-          
-          cleanedImageBase64 = `data:image/png;base64,${bufferOutput.toString('base64')}`;
-          console.log("Background removed successfully via @imgly.");
-          imageForGemini = cleanedImageBase64;
-          isBackgroundRemoved = true;
-        } catch (imglyError: any) {
-           console.error("Fallback @imgly also failed:", imglyError);
-        }
-      }
-    }
-
-    // Ensure imageForGemini is valid if background removal failed
-    if (!isBackgroundRemoved) {
-       if (!imageUri.startsWith('http') && !imageUri.startsWith('data:')) {
-        const isPng = imageUri.trim().startsWith('iVBOR');
-        const mime = isPng ? 'image/png' : 'image/jpeg';
-        imageForGemini = `data:${mime};base64,${imageUri.trim()}`;
-      } else {
-        imageForGemini = imageUri;
-      }
-    }
-
-    // Gemini Analysis Logic
     try {
-      console.log("Sending to Gemini...");
+      console.log(`LOG: Sending to Gemini with model gemini-3-pro-image-preview...`);
       
       const response = await ai.generate({
+        model: googleAI.model('gemini-3-pro-image-preview'), // Correct model for image analysis
         prompt: [
-          { text: `
-            You are the lead fashion stylist for Dressya. 
-            Analyze the provided clothing image deeply.
-            
-            MANDATORY FIELDS TO EXTRACT:
-            1. fabric: Identify the texture (e.g., ribbed, smooth, knitted, denim).
-            2. materialType: Identify the material (e.g., Cotton, Polyester, Denim, Leather).
-            3. hasPattern: Boolean true/false.
-            4. patternDescription: Describe the pattern if present (or "Solid" if none).
-            5. category: The specific item type (e.g., T-Shirt, Jeans, Dress, Sneakers).
-            6. color: Dominant color.
-            
-            Return ALL fields in the JSON schema. Be verbose with 'fabric' and 'patternDescription'.
-          `},
+          { text: "Analyze the clothing item in the image. Extract category, color, style, fabric, texture, silhouette, and material type." },
           { media: { url: imageForGemini } },
         ],
         output: { schema: ClothingSchema },
       });
 
       const result = response.output;
-      if (!result) throw new Error("Empty AI response");
-
-      console.log("Gemini success. Result keys:", Object.keys(result));
+      if (!result) {
+        console.error("LOG: Gemini returned an empty response.");
+        throw new Error("Empty AI response");
+      }
+      console.log("LOG: Gemini analysis successful. Raw result:", JSON.stringify(result));
       
-      return {
+      const finalResponse = {
         ...result,
-        cleanedImage: cleanedImageBase64 || null, // Ensure we return the cleaned image if it exists
+        cleanedImage: cleanedImageBase64,
         isBackgroundRemoved
       };
 
+      console.log("LOG: Sending final response to client:", JSON.stringify(finalResponse));
+      return finalResponse;
+
     } catch (geminiError: any) {
-      console.error("Gemini failed:", geminiError);
+      console.error("LOG: Gemini analysis failed:", geminiError.message, geminiError.stack);
       return { 
         error: `AI Analysis Failed: ${geminiError.message}`,
         isBackgroundRemoved,
@@ -202,43 +141,32 @@ export const processClothing = ai.defineFlow(
   }
 );
 
+// Moved OutfitSuggestionSchema before its use in generateOutfits
 export const OutfitSuggestionSchema = z.object({
   title: z.string().describe('A catchy title for the outfit suggestion.'),
   description: z.string().describe('A brief description of the outfit and why it works.'),
   items: z.array(z.string()).describe('An array of item IDs that make up the outfit.'),
 });
 
-
 export const generateOutfits = ai.defineFlow(
   {
     name: 'generateOutfits',
     inputSchema: z.array(ClothingSchema),
-    outputSchema: z.array(OutfitSuggestionSchema),
+    outputSchema: z.array(OutfitSuggestionSchema), // Now this is valid
   },
-  async (wardrobe) => {
+  async (wardrobe: any) => {
     if (wardrobe.length < 2) {
-      return [{
-        title: "Need More Clothes!",
-        description: "Add more items to your wardrobe to get outfit suggestions.",
-        items: [],
-      }];
+      return [];
     }
 
+    console.log("Generating outfits with text analysis model...");
     const response = await ai.generate({
+      model: googleAI.model('gemini-3-pro-preview'), // Correct model for text generation
       prompt: [
         {
           text: `
-            You are a world-class fashion stylist. Your task is to create 3-5 stylish outfits from the user's wardrobe.
-
-            **Instructions:**
-            1.  **Analyze the Wardrobe:** Carefully review the list of available clothing items, paying attention to category, color, style, and pattern.
-            2.  **Search for Inspiration:** Use your knowledge of current fashion trends to generate stylish and coherent outfits.
-            3.  **Create Outfits:** Combine the items into complete outfits. Each outfit should have a top, a bottom, and optionally, shoes and accessories if they are available in the wardrobe.
-            4.  **Provide a Title and Description:** For each outfit, create a catchy title and a brief description that explains the style and occasion for the outfit.
-            5.  **Return the Outfit:** Return a list of outfit suggestions, each with a title, description, and the IDs of the items that make up the outfit.
-
-            **Wardrobe:**
-            ${JSON.stringify(wardrobe, null, 2)}
+            Create 3-5 stylish outfits from the provided wardrobe items.
+            Wardrobe: ${JSON.stringify(wardrobe, null, 2)}
           `,
         },
       ],
