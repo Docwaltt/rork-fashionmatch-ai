@@ -250,6 +250,7 @@ export const wardrobeRouter = createTRPCRouter({
     .input(
       z.object({
         wardrobe: z.array(LocalClothingSchema),
+        numSuggestions: z.number().min(1).max(5).default(2),
       })
     )
     .mutation(async ({ input }) => {
@@ -259,11 +260,10 @@ export const wardrobeRouter = createTRPCRouter({
         
         console.log("[Wardrobe] Calling generateOutfitsFn with", input.wardrobe.length, "items");
         
-        // Pass the wardrobe array directly. 
-        // Note: index.ts 'generateOutfitsFn' is an onCallGenkit.
-        // It wraps the 'generateOutfits' flow which takes 'z.array(ClothingSchema)'.
-        // So we should pass the array directly as the argument to the callable.
-        const result = await generateOutfits(input.wardrobe);
+        const result = await generateOutfits({
+          wardrobe: input.wardrobe,
+          numSuggestions: input.numSuggestions,
+        });
         
         console.log("[Wardrobe] generateOutfitsFn result received");
         return result.data;

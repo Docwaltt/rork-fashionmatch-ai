@@ -2,7 +2,7 @@
 import { genkit, z } from 'genkit';
 import { googleAI } from '@genkit-ai/google-genai';
 
-// Enhanced logging to check for API keys at startup
+// Last-step verification of API keys
 const apiKey = process.env.GOOGLE_GENAI_API_KEY || process.env.GOOGLE_API_KEY;
 if (!apiKey) {
   console.warn("CRITICAL: GOOGLE_GENAI_API_KEY is not set.");
@@ -38,10 +38,8 @@ async function removeBackgroundWithClipdrop(imageBuffer: Buffer): Promise<string
   if (!clipdropApiKey) throw new Error("CLIPDROP_API_KEY is not set.");
   
   const formData = new FormData();
-  // Correctly create a Blob from the Buffer for Fetch API
   formData.append('image_file', new Blob([new Uint8Array(imageBuffer)], { type: 'image/jpeg' }), 'image.jpg');
 
-  console.log("LOG: Calling Clipdrop API...");
   const response = await fetch('https://clipdrop-api.co/remove-background/v1', {
     method: 'POST',
     headers: { 'x-api-key': clipdropApiKey },
@@ -50,12 +48,10 @@ async function removeBackgroundWithClipdrop(imageBuffer: Buffer): Promise<string
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error(`LOG: Clipdrop API failed: ${response.status}`, errorText);
     throw new Error(`Clipdrop API failed: ${response.status} ${errorText}`);
   }
   
   const arrayBuffer = await response.arrayBuffer();
-  console.log("LOG: Clipdrop API success. Received buffer of size:", arrayBuffer.byteLength);
   return `data:image/png;base64,${Buffer.from(arrayBuffer).toString('base64')}`;
 }
 
@@ -66,37 +62,21 @@ export const processClothing = ai.defineFlow(
     outputSchema: z.any(),
   },
   async (inputData: any) => {
-    console.log("LOG: processClothing flow started. Received input type:", typeof inputData);
-    console.log("LOG: Raw input data:", JSON.stringify(inputData).substring(0, 200)); // Log first 200 chars
-
     let imageUri = inputData?.imgData || inputData?.image || inputData?.data || (typeof inputData === 'string' ? inputData : "");
 
     if (!imageUri) {
-       console.error("LOG: No image data found in input.");
        return { error: "No image data provided" };
     }
-
-    console.log("LOG: Extracted image URI (first 100 chars):", imageUri.substring(0, 100));
 
     let cleanedImageBase64: string | undefined;
     let isBackgroundRemoved = false;
     let imageForGemini = imageUri;
 
     try {
-      let inputBuffer: Buffer;
-      if (imageUri.startsWith('http')) {
-        const response = await fetch(imageUri);
-        inputBuffer = Buffer.from(await response.arrayBuffer());
-      } else {
-        inputBuffer = Buffer.from(imageUri.replace(/^data:image\/\w+;base64,/, ''), 'base64');
-      }
-      console.log(`LOG: Created buffer of size ${inputBuffer.length} for background removal.`);
-
+      let inputBuffer = Buffer.from(imageUri.replace(/^data:image\/\w+;base64,/, ''), 'base64');
       cleanedImageBase64 = await removeBackgroundWithClipdrop(inputBuffer);
       isBackgroundRemoved = true;
       imageForGemini = cleanedImageBase64;
-      console.log("LOG: Background removed. Using cleaned image for Gemini.");
-
     } catch (error: any) {
       console.error("LOG: Background removal failed. Using original image. Error:", error.message);
       imageForGemini = imageUri; 
@@ -116,63 +96,101 @@ export const processClothing = ai.defineFlow(
 
       const result = response.output;
       if (!result) {
-        console.error("LOG: Gemini returned an empty response.");
         throw new Error("Empty AI response");
       }
-      console.log("LOG: Gemini analysis successful. Raw result:", JSON.stringify(result));
       
-      const finalResponse = {
-        ...result,
-        cleanedImage: cleanedImageBase64,
-        isBackgroundRemoved
-      };
-
-      console.log("LOG: Sending final response to client:", JSON.stringify(finalResponse));
-      return finalResponse;
+      return { ...result, cleanedImage: cleanedImageBase64, isBackgroundRemoved };
 
     } catch (geminiError: any) {
       console.error("LOG: Gemini analysis failed:", geminiError.message, geminiError.stack);
-      return { 
-        error: `AI Analysis Failed: ${geminiError.message}`,
-        isBackgroundRemoved,
-        cleanedImage: cleanedImageBase64 
-      };
+      return { error: `AI Analysis Failed: ${geminiError.message}`, isBackgroundRemoved, cleanedImage: cleanedImageBase64 };
     }
   }
 );
 
-// Moved OutfitSuggestionSchema before its use in generateOutfits
 export const OutfitSuggestionSchema = z.object({
   title: z.string().describe('A catchy title for the outfit suggestion.'),
   description: z.string().describe('A brief description of the outfit and why it works.'),
   items: z.array(z.string()).describe('An array of item IDs that make up the outfit.'),
+  generatedImageUrl: z.string().optional().describe('URL of the generated outfit image'),
 });
+
+export const generateOutfitImage = ai.defineFlow(
+  {
+    name: 'generateOutfitImage',
+    inputSchema: z.array(ClothingSchema),
+    outputSchema: z.string(),
+  },
+  async (items: z.infer<typeof ClothingSchema>[]) => {
+    if (items.length === 0) {
+      return "";
+    }
+
+    const imageParts = items.map(item => ({ media: { url: item.cleanedImage! } }));
+
+    const response = await ai.generate({
+        model: googleAI.model('gemini-3-pro-image-preview'),
+        prompt: [
+            { text: "Create a realistic flat lay image of a complete outfit, arranging the provided clothing items logically from top to bottom. Ensure the final image is stylish and visually appealing, on a clean, neutral background." },
+            ...imageParts,
+        ],
+        output: { format: 'uri' },
+    });
+
+    return response.output || "";
+  }
+);
 
 export const generateOutfits = ai.defineFlow(
   {
     name: 'generateOutfits',
-    inputSchema: z.array(ClothingSchema),
-    outputSchema: z.array(OutfitSuggestionSchema), // Now this is valid
+    inputSchema: z.object({
+      wardrobe: z.array(ClothingSchema),
+      numSuggestions: z.number().optional().default(2),
+    }),
+    outputSchema: z.array(OutfitSuggestionSchema),
   },
-  async (wardrobe: any) => {
+  async ({ wardrobe, numSuggestions }) => {
+    console.log(`[generateOutfits] Starting flow for ${wardrobe.length} items. Requesting ${numSuggestions} suggestions.`);
     if (wardrobe.length < 2) {
+      console.log('[generateOutfits] Wardrobe has less than 2 items. Returning empty array.');
       return [];
     }
 
-    console.log("Generating outfits with text analysis model...");
-    const response = await ai.generate({
-      model: googleAI.model('gemini-3-pro-preview'), // Correct model for text generation
-      prompt: [
-        {
-          text: `
-            Create 3-5 stylish outfits from the provided wardrobe items.
-            Wardrobe: ${JSON.stringify(wardrobe, null, 2)}
-          `,
-        },
-      ],
-      output: { schema: z.array(OutfitSuggestionSchema) },
-    });
+    const promptText = `Create ${numSuggestions} stylish and complete outfits from the provided wardrobe items. For each outfit, provide a title, a brief description, and the list of item IDs. Wardrobe: ${JSON.stringify(wardrobe, null, 2)}`;
+    console.log('[generateOutfits] Prompt text created. Length:', promptText.length);
 
-    return response.output || [];
+    try {
+        const response = await ai.generate({
+          model: googleAI.model('gemini-3-pro-preview'),
+          prompt: [
+            {
+              text: promptText
+            },
+          ],
+          output: { schema: z.array(OutfitSuggestionSchema) },
+        });
+
+        const suggestions = response.output || [];
+        console.log(`[generateOutfits] Received ${suggestions.length} suggestions from AI.`);
+        if (suggestions.length === 0) {
+            console.warn('[generateOutfits] AI returned 0 suggestions. Response:', JSON.stringify(response, null, 2));
+        }
+
+        for (const suggestion of suggestions) {
+          const outfitItems = suggestion.items.map(itemId => wardrobe.find(item => item.id === itemId)).filter(Boolean) as z.infer<typeof ClothingSchema>[];
+          if (outfitItems.length > 0) {
+            console.log(`[generateOutfits] Generating image for suggestion: "${suggestion.title}" with ${outfitItems.length} items.`);
+            const generatedImageUrl = await generateOutfitImage.run(outfitItems) as unknown as string;
+            suggestion.generatedImageUrl = generatedImageUrl;
+          }
+        }
+        console.log('[generateOutfits] Flow completed successfully.');
+        return suggestions;
+
+    } catch(error: any) {
+        console.error('[generateOutfits] CRITICAL ERROR during ai.generate call:', error.message, error.stack);
+        return []; 
+    }
   }
 );

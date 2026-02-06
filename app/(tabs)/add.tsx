@@ -1,3 +1,4 @@
+
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -28,52 +29,24 @@ import { ClothingCategory } from "@/types/wardrobe";
 import { getCategoriesForGender } from "@/types/user";
 
 const compressAndConvertToBase64 = async (uri: string): Promise<string> => {
-  console.log("[AddItem] Compressing image...");
-  
   try {
     const manipulated = await ImageManipulator.manipulateAsync(
       uri,
       [{ resize: { width: 800 } }],
       { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
     );
-    
-    if (manipulated.base64) {
-      const sizeKB = (manipulated.base64.length * 0.75) / 1024;
-      console.log(`[AddItem] Compressed image size: ${sizeKB.toFixed(0)}KB`);
-      return manipulated.base64;
-    }
-  } catch (compressError) {
-    console.warn("[AddItem] Compression failed, trying direct conversion:", compressError);
-  }
-  
-  if (Platform.OS === 'web') {
+    return `data:image/jpeg;base64,${manipulated.base64}`;
+  } catch (error) {
+    console.warn("Image manipulation failed, falling back to fetch.", error);
     const response = await fetch(uri);
     const blob = await response.blob();
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        const dataUrl = reader.result as string;
-        const base64 = dataUrl.split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  } else {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const dataUrl = reader.result as string;
-        const base64 = dataUrl.split(',')[1];
-        resolve(base64);
-      };
+      reader.onloadend = () => resolve(reader.result as string);
       reader.onerror = reject;
       reader.readAsDataURL(blob);
     });
   }
-  throw new Error("Failed to convert image to Base64");
 };
 
 export default function AddItemScreen() {
@@ -92,6 +65,7 @@ export default function AddItemScreen() {
   const [isSavingItem, setIsSavingItem] = useState(false);
   const { addItem } = useWardrobe();
   
+  // State for all analyzable fields
   const [material, setMaterial] = useState('');
   const [fabric, setFabric] = useState('');
   const [pattern, setPattern] = useState('');
@@ -104,34 +78,56 @@ export default function AddItemScreen() {
 
   const [isStyleMeMode, setIsStyleMeMode] = useState(false);
 
+  const categories = useMemo(() => getCategoriesForGender(userProfile?.gender || 'female'), [userProfile?.gender]);
+
   const analyzeImageMutation = trpc.wardrobe.analyze.useMutation({
-    onSuccess: (data: any) => {
+    onSuccess: (data) => {
+      if (!data || typeof data !== 'object') {
+        setAnalysisError("AI analysis returned invalid data. Please select manually.");
+        setAnalysisSuccess(false);
+        setIsProcessing(false);
+        return;
+      }
+
       setAnalysisError(null);
       setAnalysisSuccess(true);
-      if (data.cleanedImageUrl) setProcessedImage(data.cleanedImageUrl);
-      if (data.color) setDetectedColors([data.color]);
-      if (data.material) setMaterial(String(data.material));
-      if (data.fabric) setFabric(data.fabric);
-      if (data.pattern) setPattern(String(data.pattern));
-      if (data.style) setStyle(data.style);
-      if (data.texture) setTexture(data.texture);
-      if (data.silhouette) setSilhouette(data.silhouette);
-      if (data.patternDescription) setPatternDescription(data.patternDescription);
-      if (data.materialType) setMaterialType(data.materialType);
-      if (data.hasPattern !== undefined) setHasPattern(!!data.hasPattern);
+      
+      // Update UI with all details from the backend
+      setProcessedImage(data.cleanedImageUrl || null);
+      setDetectedColors(data.color ? [data.color] : []);
+      setMaterial(String(data.material || ''));
+      setFabric(String(data.fabric || ''));
+      setPattern(String(data.pattern || ''));
+      setStyle(String(data.style || ''));
+      setTexture(String(data.texture || ''));
+      setSilhouette(String(data.silhouette || ''));
+      setPatternDescription(String(data.patternDescription || ''));
+      setMaterialType(String(data.materialType || ''));
+      setHasPattern(!!data.hasPattern);
 
+      // Robust category matching
       if (data.category) {
-        const validCategories = categories.map(c => c.id);
-        const returnedCategory = data.category as ClothingCategory;
-        if (validCategories.includes(returnedCategory as any)) {
-          setSelectedCategory(returnedCategory);
+        const returnedCategory = String(data.category).toLowerCase().trim();
+        const validCategories = categories.map(c => ({ id: c.id, label: c.label.toLowerCase() }));
+        
+        let match = validCategories.find(c => c.id === returnedCategory || c.label === returnedCategory);
+        
+        if (match) {
+          setSelectedCategory(match.id as ClothingCategory);
+        } else {
+            console.warn(`AI returned category "${returnedCategory}" which has no direct match.`);
+            // Fallback for partial matches (e.g., "short sleeve shirt" -> "shirt")
+            const partialMatch = validCategories.find(c => returnedCategory.includes(c.label));
+            if (partialMatch) {
+                setSelectedCategory(partialMatch.id as ClothingCategory);
+            }
         }
       }
       setIsProcessing(false);
     },
-    onError: (error: any) => {
+    onError: (error) => {
       setIsProcessing(false);
-      setAnalysisError("AI analysis unavailable. Please select category manually.");
+      setAnalysisError(error.message || "AI analysis unavailable. Please select category manually.");
       setAnalysisSuccess(false);
     },
   });
@@ -140,21 +136,14 @@ export default function AddItemScreen() {
     setIsProcessing(true);
     setCapturedImage(imageUri);
     setProcessedImage(imageUri);
-    
     try {
-      const base64 = await compressAndConvertToBase64(imageUri);
-      const base64Image = `data:image/jpeg;base64,${base64}`;
+      const base64Image = await compressAndConvertToBase64(imageUri);
       analyzeImageMutation.mutate({ imageUrl: base64Image, gender: userProfile?.gender || undefined });
     } catch (error: any) {
       setAnalysisError("Failed to prepare image. Please select category manually.");
       setIsProcessing(false);
     }
   };
-
-  const categories = useMemo(() => {
-    if (userProfile?.gender) return getCategoriesForGender(userProfile.gender);
-    return getCategoriesForGender('female'); // Default
-  }, [userProfile?.gender]);
 
   const handleTakePhoto = async () => {
     if (!cameraRef.current) return;

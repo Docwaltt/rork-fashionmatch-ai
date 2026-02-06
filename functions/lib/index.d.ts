@@ -3,5 +3,6 @@ export declare const generateOutfitsFn: import("firebase-functions/v2/https").Ca
     title: string;
     description: string;
     items: string[];
+    generatedImageUrl?: string | undefined;
 }[]>>, unknown>;
 export declare const processClothingFn: import("firebase-functions/v2/https").HttpsFunction;
