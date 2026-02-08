@@ -50,6 +50,10 @@ export const wardrobeRouter = createTRPCRouter({
 
         console.log("[Wardrobe] Analysis successful. Result keys:", Object.keys(data || {}));
 
+        if (data && data.error) {
+          throw new Error(data.error);
+        }
+
         // Search for cleaned image across multiple possible fields as per memory
         const cleanedImageUrl = data.cleanedImage ||
                                 data.processedImage ||
@@ -90,6 +94,11 @@ export const wardrobeRouter = createTRPCRouter({
         });
 
         console.log("[Wardrobe] suggestOutfit result received");
+
+        if (result && result.error) {
+          throw new Error(typeof result.error === 'string' ? result.error : result.error.message || "Unknown AI error");
+        }
+
         return result;
       } catch (error: any) {
         console.error("[Wardrobe] Error suggesting outfits:", error.message);
