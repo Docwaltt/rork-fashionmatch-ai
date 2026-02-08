@@ -18,13 +18,17 @@ export async function callFirebaseFunction(functionName: string, data: any) {
   if (functionName === 'analyzeImage' || functionName === 'processClothingFn' || functionName === 'analyze') {
     url = 'https://processclothingfn-pfc64ufnsq-uc.a.run.app';
   } else if (functionName === 'generateOutfitsFn' || functionName === 'suggestOutfit') {
-    url = `https://us-central1-${projectId}.cloudfunctions.net/generateOutfitsFn`;
+    // Standardizing on Cloud Run URL for consistency with processclothingfn
+    url = 'https://generateoutfitsfn-pfc64ufnsq-uc.a.run.app';
   } else {
     // Fallback pattern
     url = `https://us-central1-${projectId}.cloudfunctions.net/${functionName}`;
   }
 
-  console.log(`[FirebaseUtils] Calling function: ${functionName} at ${url}`);
+  const startTime = Date.now();
+  // Calculate approximate payload size (for debugging)
+  const payloadSize = JSON.stringify(data).length;
+  console.log(`[FirebaseUtils] Calling function: ${functionName} at ${url} | Payload: ~${(payloadSize / 1024).toFixed(2)}KB`);
 
   try {
     const client = await auth.getIdTokenClient(url);
@@ -34,6 +38,9 @@ export async function callFirebaseFunction(functionName: string, data: any) {
       data: { data }, // standard wrapper for Firebase Callable-like onRequest functions
       timeout: 300000, // 5 minutes timeout
     });
+
+    const duration = Date.now() - startTime;
+    console.log(`[FirebaseUtils] Function ${functionName} responded in ${duration}ms | Status: ${response.status}`);
 
     // Recursive unwrapping to extract the actual payload from Genkit/Firebase structures
     let result = response.data;

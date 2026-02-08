@@ -84,10 +84,10 @@ export const processClothing = ai.defineFlow(
     }
 
     try {
-      console.log(`LOG: Sending to Gemini with model gemini-3-pro-image-preview...`);
+      console.log(`LOG: Sending to Gemini with model gemini-2.0-flash...`);
       
       const response = await ai.generate({
-        model: googleAI.model('gemini-3-pro-image-preview'),
+        model: googleAI.model('gemini-2.0-flash'),
         prompt: [
           { text: "Analyze the clothing item in the image. Extract category, color, style, fabric, texture, silhouette, and material type." },
           { media: { url: imageForGemini } },
@@ -170,12 +170,26 @@ export const generateOutfits = ai.defineFlow(
       return [];
     }
 
-    const promptText = `Create ${numSuggestions} stylish and complete outfits from the provided wardrobe items. For each outfit, provide a title, a brief one-sentence description, a detailed reason explaining why the outfit is a good fashion match (considering color theory, style harmony, and occasion suitability), and the list of item IDs. Wardrobe: ${JSON.stringify(wardrobe, null, 2)}`;
+    // Strip large image data from the wardrobe items before sending to the text-based AI prompt
+    const wardrobeForAI = wardrobe.map(item => ({
+      id: item.id,
+      category: item.category,
+      color: item.color,
+      style: item.style,
+      fabric: item.fabric,
+      texture: item.texture,
+      silhouette: item.silhouette,
+      materialType: item.materialType,
+      hasPattern: item.hasPattern,
+      patternDescription: item.patternDescription
+    }));
+
+    const promptText = `Create ${numSuggestions} stylish and complete outfits from the provided wardrobe items. For each outfit, provide a title, a brief one-sentence description, a detailed reason explaining why the outfit is a good fashion match (considering color theory, style harmony, and occasion suitability), and the list of item IDs. Wardrobe: ${JSON.stringify(wardrobeForAI, null, 2)}`;
     console.log('[generateOutfits] Prompt text created. Length:', promptText.length);
 
     try {
         const response = await ai.generate({
-          model: googleAI.model('gemini-3-pro-preview'),
+          model: googleAI.model('gemini-2.0-flash'),
           prompt: [
             {
               text: promptText

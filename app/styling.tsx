@@ -165,7 +165,7 @@ export default function StylingScreen() {
               <WandSparkles size={48} color={Colors.gray[600]} strokeWidth={1} />
               <Text style={styles.emptyText}>No Suggestions Yet</Text>
               <Text style={styles.emptySubtext}>
-                We couldn't generate any outfits. This can happen if there aren't enough items, or the selected items don't make a good combo.
+                We couldn&apos;t generate any outfits. This can happen if there aren&apos;t enough items, or the selected items don&apos;t make a good combo.
               </Text>
               <TouchableOpacity style={styles.retryButton} onPress={handleGenerate}>
                 <Text style={styles.retryButtonText}>✨ TRY AGAIN</Text>

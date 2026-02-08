@@ -48,6 +48,15 @@ export const wardrobeRouter = createTRPCRouter({
 
         console.log("[Wardrobe] Analysis successful. Result keys:", Object.keys(data || {}));
 
+        // Check for error returned in the successful response object
+        if (data && data.error) {
+          console.error("[Wardrobe] Analysis returned an error:", data.error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: typeof data.error === 'string' ? data.error : (data.error.message || "AI Analysis Failed"),
+          });
+        }
+
         // Search for cleaned image across multiple possible fields as per memory
         const cleanedImageUrl = data.cleanedImage ||
                                 data.processedImage ||
@@ -88,6 +97,16 @@ export const wardrobeRouter = createTRPCRouter({
         });
 
         console.log("[Wardrobe] suggestOutfit result received");
+
+        // Check for error returned in the successful response object
+        if (result && result.error) {
+          console.error("[Wardrobe] Suggestion returned an error:", result.error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: typeof result.error === 'string' ? result.error : (result.error.message || "Failed to generate outfit suggestions."),
+          });
+        }
+
         return result;
       } catch (error: any) {
         console.error("[Wardrobe] Error suggesting outfits:", error.message);
