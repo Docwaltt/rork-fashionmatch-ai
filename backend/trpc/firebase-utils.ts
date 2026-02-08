@@ -43,17 +43,25 @@ export async function callFirebaseFunction(functionName: string, data: any) {
       url,
       method: 'POST',
       data: { data }, // standard wrapper for Firebase Callable-like onRequest functions
-      timeout: 600000, // 10 minutes timeout
+      timeout: 120000, // 2 minutes timeout
     });
 
     // Recursive unwrapping to extract the actual payload from Genkit/Firebase structures
     let result: any = response.data;
 
+    if (!result || typeof result !== 'object') {
+       console.error(`[FirebaseUtils] Expected JSON object response, but got: ${typeof result}`);
+       // If it's a string, it might be a non-JSON error message from the server
+       if (typeof result === 'string' && result.includes('<html')) {
+           throw new Error("Server returned an HTML error page. The function may have crashed or timed out.");
+       }
+       return result;
+    }
+
     // Log raw response for debugging
-    console.log(`[FirebaseUtils] Raw response keys:`, result && typeof result === 'object' ? Object.keys(result) : 'none');
+    console.log(`[FirebaseUtils] Raw response keys:`, Object.keys(result));
 
     let iterations = 0;
-    // Only unwrap if result is an object and not null, to avoid spreading strings later
     while (result && typeof result === 'object' && (result.result !== undefined || result.data !== undefined) && iterations < 5) {
       result = result.result !== undefined ? result.result : result.data;
       iterations++;

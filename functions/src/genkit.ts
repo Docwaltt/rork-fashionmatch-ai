@@ -203,20 +203,13 @@ export const generateOutfits = ai.defineFlow(
             console.warn('[generateOutfits] AI returned 0 suggestions. Response:', JSON.stringify(response, null, 2));
         }
 
-        // Parallelize image generation to avoid timeouts
-        await Promise.all(suggestions.map(async (suggestion) => {
-          const outfitItems = suggestion.items.map((itemId: string) => wardrobe.find(item => item.id === itemId)).filter(Boolean) as z.infer<typeof ClothingSchema>[];
-          if (outfitItems.length > 0) {
-            console.log(`[generateOutfits] Generating image for suggestion: "${suggestion.title}" with ${outfitItems.length} items.`);
-            try {
-                const generatedImageUrl = await generateOutfitImage.run(outfitItems) as unknown as string;
-                suggestion.generatedImageUrl = generatedImageUrl;
-            } catch (imageGenError: any) {
-                console.error(`[generateOutfits] Image generation failed for suggestion: "${suggestion.title}". Error:`, imageGenError.message);
-                // Continue to next suggestion without a generated image for this one
-            }
-          }
-        }));
+        // Disabled image generation because Gemini 3 Pro is a multimodal model (understanding images)
+        // but not an image generation model (like Imagen). Using it for image generation output
+        // was causing the indefinite hangs (9+ minutes) and timeouts reported.
+        // The app will now return suggestions instantly and use the frontend grid fallback.
+        for (const suggestion of suggestions) {
+          suggestion.generatedImageUrl = "";
+        }
         console.log('[generateOutfits] Flow completed successfully.');
         return suggestions;
 

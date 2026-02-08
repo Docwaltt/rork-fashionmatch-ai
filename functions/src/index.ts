@@ -61,7 +61,7 @@ export const generateOutfitsFn = onRequest({
     console.log(`[generateOutfitsFn] Received ${Array.isArray(result) ? result.length : 'non-array'} suggestions from flow.`);
     
     // For onRequest, we need to send the response back manually.
-    res.status(200).json({ result: result }); // tRPC expects a 'result' wrapper
+    res.status(200).json(result);
   } catch (error: any) {
     console.error("generateOutfitsFn error:", error);
     res.status(500).json({ error: { message: error.message } }); // tRPC error format
