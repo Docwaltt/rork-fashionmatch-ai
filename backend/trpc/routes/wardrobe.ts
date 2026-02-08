@@ -39,7 +39,7 @@ export const wardrobeRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       console.log("[Wardrobe] Received image for analysis");
       try {
-        const data = await callFirebaseFunction('analyzeImage', {
+        const data: any = await callFirebaseFunction('analyzeImage', {
           imgData: input.imageUrl,
           gender: input.gender,
           removeBackground: true,
@@ -56,7 +56,7 @@ export const wardrobeRouter = createTRPCRouter({
                                 data.cleanedImageUrl;
 
         return {
-          ...data,
+          ...(data || {}),
           cleanedImageUrl: cleanedImageUrl,
         };
       } catch (error: any) {

@@ -13,7 +13,7 @@ const CATEGORIES = ['All', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes', '
 
 export default function WardrobeSelectionScreen() {
   const { event } = useLocalSearchParams<{ event: string }>();
-  const { wardrobe } = useWardrobe(); // Correctly use 'wardrobe' from context
+  const { items: wardrobe } = useWardrobe(); // Correctly use 'wardrobe' from context
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [filter, setFilter] = useState('All');
 
@@ -34,7 +34,7 @@ export default function WardrobeSelectionScreen() {
     });
   };
 
-  const filteredItems = wardrobe.filter(item => 
+  const filteredItems = (wardrobe || []).filter((item: ClothingItem) =>
     filter === 'All' || item.category.toLowerCase() === filter.toLowerCase()
   );
 
@@ -60,7 +60,7 @@ export default function WardrobeSelectionScreen() {
       </ScrollView>
 
       <ScrollView contentContainerStyle={styles.gridContainer}>
-        {filteredItems.map(item => (
+        {filteredItems.map((item: ClothingItem) => (
           <TouchableOpacity key={item.id} style={styles.itemContainer} onPress={() => handleToggleItem(item.id)}>
             <Image source={{ uri: item.imageUri }} style={styles.itemImage} />
             {selectedItems.includes(item.id) && (
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
     chipText: { color: Colors.white, fontWeight: '500' },
     chipTextSelected: { color: Colors.richBlack, fontWeight: 'bold' },
     gridContainer: { flexDirection: 'row', flexWrap: 'wrap', padding: 8 },
-    itemContainer: { width: '33.33%'-16, aspectRatio: 1, padding: 8 },
+    itemContainer: { width: '33.33%', aspectRatio: 1, padding: 8 },
     itemImage: { flex: 1, width: '100%', height: '100%' },
     selectionOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(212, 175, 55, 0.7)', justifyContent: 'center', alignItems: 'center' },
     footer: { padding: 16, borderTopWidth: 1, borderColor: Colors.gray[100] },
