@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
     "target": "ES2022",
     "lib": ["ES2022"],
     "sourceMap": true,
@@ -11,8 +11,7 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "forceConsistentCasingInFileNames": true,
-    "rootDirs": ["src"]
+    "forceConsistentCasingInFileNames": true
   },
   "include": ["src/**/*"]
 }

@@ -1,6 +1,7 @@
 import { z } from 'genkit';
 export declare const ClothingSchema: z.ZodObject<{
     id: z.ZodOptional<z.ZodString>;
+    imageUri: z.ZodOptional<z.ZodString>;
     category: z.ZodString;
     color: z.ZodString;
     style: z.ZodString;
@@ -20,6 +21,7 @@ export declare const ClothingSchema: z.ZodObject<{
     confidence: number;
     isBackgroundRemoved: boolean;
     id?: string | undefined;
+    imageUri?: string | undefined;
     cleanedImage?: string | undefined;
     fabric?: string | undefined;
     texture?: string | undefined;
@@ -34,6 +36,7 @@ export declare const ClothingSchema: z.ZodObject<{
     confidence: number;
     isBackgroundRemoved: boolean;
     id?: string | undefined;
+    imageUri?: string | undefined;
     cleanedImage?: string | undefined;
     fabric?: string | undefined;
     texture?: string | undefined;
@@ -42,25 +45,29 @@ export declare const ClothingSchema: z.ZodObject<{
     hasPattern?: boolean | undefined;
     patternDescription?: string | undefined;
 }>;
-export declare const processClothing: import("genkit").Action<z.ZodAny, z.ZodAny, z.ZodTypeAny>;
+export declare const processClothing: import("@genkit-ai/core/lib/action-Dt9i8CGd").u<z.ZodAny, z.ZodAny, z.ZodTypeAny, import("@genkit-ai/core/lib/action-Dt9i8CGd").q<z.ZodTypeAny>>;
 export declare const OutfitSuggestionSchema: z.ZodObject<{
     title: z.ZodString;
     description: z.ZodString;
+    reason: z.ZodString;
     items: z.ZodArray<z.ZodString, "many">;
     generatedImageUrl: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     title: string;
     description: string;
+    reason: string;
     items: string[];
     generatedImageUrl?: string | undefined;
 }, {
     title: string;
     description: string;
+    reason: string;
     items: string[];
     generatedImageUrl?: string | undefined;
 }>;
-export declare const generateOutfitImage: import("genkit").Action<z.ZodArray<z.ZodObject<{
+export declare const generateOutfitImage: import("@genkit-ai/core/lib/action-Dt9i8CGd").u<z.ZodArray<z.ZodObject<{
     id: z.ZodOptional<z.ZodString>;
+    imageUri: z.ZodOptional<z.ZodString>;
     category: z.ZodString;
     color: z.ZodString;
     style: z.ZodString;
@@ -80,6 +87,7 @@ export declare const generateOutfitImage: import("genkit").Action<z.ZodArray<z.Z
     confidence: number;
     isBackgroundRemoved: boolean;
     id?: string | undefined;
+    imageUri?: string | undefined;
     cleanedImage?: string | undefined;
     fabric?: string | undefined;
     texture?: string | undefined;
@@ -94,6 +102,7 @@ export declare const generateOutfitImage: import("genkit").Action<z.ZodArray<z.Z
     confidence: number;
     isBackgroundRemoved: boolean;
     id?: string | undefined;
+    imageUri?: string | undefined;
     cleanedImage?: string | undefined;
     fabric?: string | undefined;
     texture?: string | undefined;
@@ -101,10 +110,11 @@ export declare const generateOutfitImage: import("genkit").Action<z.ZodArray<z.Z
     materialType?: string | undefined;
     hasPattern?: boolean | undefined;
     patternDescription?: string | undefined;
-}>, "many">, z.ZodString, z.ZodTypeAny>;
-export declare const generateOutfits: import("genkit").Action<z.ZodObject<{
+}>, "many">, z.ZodString, z.ZodTypeAny, import("@genkit-ai/core/lib/action-Dt9i8CGd").q<z.ZodTypeAny>>;
+export declare const generateOutfits: import("@genkit-ai/core/lib/action-Dt9i8CGd").u<z.ZodObject<{
     wardrobe: z.ZodArray<z.ZodObject<{
         id: z.ZodOptional<z.ZodString>;
+        imageUri: z.ZodOptional<z.ZodString>;
         category: z.ZodString;
         color: z.ZodString;
         style: z.ZodString;
@@ -124,6 +134,7 @@ export declare const generateOutfits: import("genkit").Action<z.ZodObject<{
         confidence: number;
         isBackgroundRemoved: boolean;
         id?: string | undefined;
+        imageUri?: string | undefined;
         cleanedImage?: string | undefined;
         fabric?: string | undefined;
         texture?: string | undefined;
@@ -138,6 +149,7 @@ export declare const generateOutfits: import("genkit").Action<z.ZodObject<{
         confidence: number;
         isBackgroundRemoved: boolean;
         id?: string | undefined;
+        imageUri?: string | undefined;
         cleanedImage?: string | undefined;
         fabric?: string | undefined;
         texture?: string | undefined;
@@ -155,6 +167,7 @@ export declare const generateOutfits: import("genkit").Action<z.ZodObject<{
         confidence: number;
         isBackgroundRemoved: boolean;
         id?: string | undefined;
+        imageUri?: string | undefined;
         cleanedImage?: string | undefined;
         fabric?: string | undefined;
         texture?: string | undefined;
@@ -172,6 +185,7 @@ export declare const generateOutfits: import("genkit").Action<z.ZodObject<{
         confidence: number;
         isBackgroundRemoved: boolean;
         id?: string | undefined;
+        imageUri?: string | undefined;
         cleanedImage?: string | undefined;
         fabric?: string | undefined;
         texture?: string | undefined;
@@ -184,16 +198,19 @@ export declare const generateOutfits: import("genkit").Action<z.ZodObject<{
 }>, z.ZodArray<z.ZodObject<{
     title: z.ZodString;
     description: z.ZodString;
+    reason: z.ZodString;
     items: z.ZodArray<z.ZodString, "many">;
     generatedImageUrl: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     title: string;
     description: string;
+    reason: string;
     items: string[];
     generatedImageUrl?: string | undefined;
 }, {
     title: string;
     description: string;
+    reason: string;
     items: string[];
     generatedImageUrl?: string | undefined;
-}>, "many">, z.ZodTypeAny>;
+}>, "many">, z.ZodTypeAny, import("@genkit-ai/core/lib/action-Dt9i8CGd").q<z.ZodTypeAny>>;

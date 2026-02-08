@@ -42,21 +42,29 @@ export const analyzeImage = onCall({
   }
 });
 
-// Export generateOutfits as a callable function
-export const generateOutfitsFn = onCall({
+// Export generateOutfits as an HTTP function for more control
+export const generateOutfitsFn = onRequest({
   memory: '2GiB',
   timeoutSeconds: 300,
   region: 'us-central1',
-  invoker: 'public', // Allow unauthenticated access
-  secrets: [googleGenAiApiKey, googleServiceAccountEmail, googlePrivateKey], // Bind secrets
-}, async (request) => {
+  invoker: 'public',
+  cors: true, // Enable CORS for direct client calls
+  secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey],
+}, async (req: Request, res: Response) => {
+  console.log("generateOutfitsFn (onRequest) called. Body keys:", Object.keys(req.body || {}));
   try {
-    console.log("generateOutfitsFn called with data keys:", Object.keys(request.data || {}));
-    const result = await generateOutfits.run(request.data);
-    return result;
+    // The tRPC client for onRequest will wrap the input in a 'data' object.
+    const input = req.body.data;
+    
+    const result = await generateOutfits.run(input);
+    
+    console.log(`[generateOutfitsFn] Received ${Array.isArray(result) ? result.length : 'non-array'} suggestions from flow.`);
+    
+    // For onRequest, we need to send the response back manually.
+    res.status(200).json({ result: result }); // tRPC expects a 'result' wrapper
   } catch (error: any) {
     console.error("generateOutfitsFn error:", error);
-    throw new HttpsError('internal', error.message, error);
+    res.status(500).json({ error: { message: error.message } }); // tRPC error format
   }
 });
 

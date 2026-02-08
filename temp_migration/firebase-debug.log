@@ -1,0 +1,33 @@
+[debug] [2026-02-07T01:46:31.418Z] ----------------------------------------------------------------------
+[debug] [2026-02-07T01:46:31.422Z] Command:       /nix/store/ws50yvm6vzlzf7jzz6n7xh4szddrack1-nodejs-20.19.1/bin/node /home/user/.global_modules/bin/firebase init --non-interactive
+[debug] [2026-02-07T01:46:31.423Z] CLI Version:   15.3.1
+[debug] [2026-02-07T01:46:31.424Z] Platform:      linux
+[debug] [2026-02-07T01:46:31.424Z] Node Version:  v20.19.1
+[debug] [2026-02-07T01:46:31.424Z] Time:          Sat Feb 07 2026 01:46:31 GMT+0000 (Coordinated Universal Time)
+[debug] [2026-02-07T01:46:31.425Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-02-07T01:46:34.623Z] Checked if tokens are valid: false, expires at: 1770429387948
+[debug] [2026-02-07T01:46:34.624Z] Checked if tokens are valid: false, expires at: 1770429387948
+[debug] [2026-02-07T01:46:34.625Z] > refreshing access token with scopes: []
+[debug] [2026-02-07T01:46:34.629Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-02-07T01:46:34.629Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-02-07T01:46:34.800Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-02-07T01:46:34.803Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-02-07T01:46:34.827Z] >>> [apiv2][query] GET https://monospace-pa.googleapis.com/v1/workspaces/dressya-94995273 [none]
+[debug] [2026-02-07T01:46:35.567Z] <<< [apiv2][status] GET https://monospace-pa.googleapis.com/v1/workspaces/dressya-94995273 200
+[debug] [2026-02-07T01:46:35.568Z] <<< [apiv2][body] GET https://monospace-pa.googleapis.com/v1/workspaces/dressya-94995273 {"workspaceId":"dressya-94995273","name":"Dressya","workspaceRedirectUrl":"firebase-dressya-1768482611379.cluster-yy7ncoxb5zd4ouvntrhoc3go3k.cloudworkstations.dev","status":"WORKSPACE_STATUS_RUNNING","lastAccessDatetime":"2026-02-06T20:08:45.002627Z","workspaceTemplate":"WORKSPACE_TEMPLATE_BLANK_WEB","owner":"SELF","serviceAccountEmail":"msp-2309068831748308434@monospace-per-ws-sa-7.iam.gserviceaccount.com","gitRepoUrl":"https://github.com/Docwaltt/rork-fashionmatch-ai","enableNix":true,"ownerEmail":"ewaltex@gmail.com","workstationAccessToken":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2Nsb3VkLmdvb2dsZS5jb20vd29ya3N0YXRpb25zIiwiYXVkIjoiZmlyZWJhc2UtZHJlc3N5YS0xNzY4NDgyNjExMzc5LmNsdXN0ZXIteXk3bmNveGI1emQ0b3V2bnRyaG9jM2dvM2suY2xvdWR3b3Jrc3RhdGlvbnMuZGV2IiwiaWF0IjoxNzcwNDI4Nzk1LCJleHAiOjE3NzA1MTUxOTV9.jtRSyNQvRXxMpmxoU2nYxf7Q5ZTZeYRx2BuhMmtacsdwHoWTgA6RseWUo1LkBBVXVNCqv0QUdQagnt3v_dAUxi-qsOOt66q2CD14ZXoBx6lsK9EA_-rGV_IbIzB2nKXkuS_2OeNRjw4SLmwanR5WzPiPNhtqjwDrJdTtdG7o8E9tdJ_3XQHRog5fwrgUGQwXNxwKeCwqDNxC0hAq9mqZmtG94-6O2RVSrVAoxsrzbk_ata9xk4msbVq1QMQY3NjZBKMHtUl15fU3Xeiez0-LN9hvCkoP4wa7Z15aHcXDn64v8knbt62yVvAzNj--cXFRKSdf3JRbG4BqGXgwKg-z4w","firebaseProjectId":"dressya-6ff56"}
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  /home/user/rork-fashionmatch-ai
+
+Before we get started, keep in mind:
+
+  * You are initializing within an existing Firebase project directory
+

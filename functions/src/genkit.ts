@@ -16,6 +16,7 @@ if (!clipdropApiKey) {
 
 export const ClothingSchema = z.object({
   id: z.string().optional().describe('Unique ID for the clothing item'),
+  imageUri: z.string().optional().describe('The original Base64 URI of the image.'),
   category: z.string().describe('Type of item (e.g., Denim Jacket, T-Shirt, Jeans)'),
   color: z.string().describe('Primary color detected'),
   style: z.string().describe('Fashion style (e.g., Casual, Formal, Vintage, Streetwear)'),
@@ -86,7 +87,7 @@ export const processClothing = ai.defineFlow(
       console.log(`LOG: Sending to Gemini with model gemini-3-pro-image-preview...`);
       
       const response = await ai.generate({
-        model: googleAI.model('gemini-3-pro-image-preview'), // Correct model for image analysis
+        model: googleAI.model('gemini-3-pro-image-preview'),
         prompt: [
           { text: "Analyze the clothing item in the image. Extract category, color, style, fabric, texture, silhouette, and material type." },
           { media: { url: imageForGemini } },
@@ -99,7 +100,7 @@ export const processClothing = ai.defineFlow(
         throw new Error("Empty AI response");
       }
       
-      return { ...result, cleanedImage: cleanedImageBase64, isBackgroundRemoved };
+      return { ...result, imageUri, cleanedImage: cleanedImageBase64, isBackgroundRemoved };
 
     } catch (geminiError: any) {
       console.error("LOG: Gemini analysis failed:", geminiError.message, geminiError.stack);
@@ -110,7 +111,8 @@ export const processClothing = ai.defineFlow(
 
 export const OutfitSuggestionSchema = z.object({
   title: z.string().describe('A catchy title for the outfit suggestion.'),
-  description: z.string().describe('A brief description of the outfit and why it works.'),
+  description: z.string().describe('A brief, one-sentence description of the outfit.'),
+  reason: z.string().describe('A detailed explanation for why this outfit is a good fashion match, considering color theory, style harmony, and occasion suitability.'),
   items: z.array(z.string()).describe('An array of item IDs that make up the outfit.'),
   generatedImageUrl: z.string().optional().describe('URL of the generated outfit image'),
 });
@@ -126,7 +128,18 @@ export const generateOutfitImage = ai.defineFlow(
       return "";
     }
 
-    const imageParts = items.map(item => ({ media: { url: item.cleanedImage! } }));
+    const imageParts = items.map(item => {
+        const imageUrl = item.cleanedImage || item.imageUri;
+        if (!imageUrl) {
+            console.error(`[generateOutfitImage] CRITICAL: Item with ID ${item.id} has no cleanedImage or imageUri. Cannot generate outfit.`);
+            return null;
+        }
+        return { media: { url: imageUrl } };
+    }).filter((part): part is { media: { url: string } } => part !== null);
+
+    if (imageParts.length !== items.length) {
+        throw new Error("Could not generate outfit image because some items were missing image data.");
+    }
 
     const response = await ai.generate({
         model: googleAI.model('gemini-3-pro-image-preview'),
@@ -157,7 +170,7 @@ export const generateOutfits = ai.defineFlow(
       return [];
     }
 
-    const promptText = `Create ${numSuggestions} stylish and complete outfits from the provided wardrobe items. For each outfit, provide a title, a brief description, and the list of item IDs. Wardrobe: ${JSON.stringify(wardrobe, null, 2)}`;
+    const promptText = `Create ${numSuggestions} stylish and complete outfits from the provided wardrobe items. For each outfit, provide a title, a brief one-sentence description, a detailed reason explaining why the outfit is a good fashion match (considering color theory, style harmony, and occasion suitability), and the list of item IDs. Wardrobe: ${JSON.stringify(wardrobe, null, 2)}`;
     console.log('[generateOutfits] Prompt text created. Length:', promptText.length);
 
     try {
@@ -181,8 +194,13 @@ export const generateOutfits = ai.defineFlow(
           const outfitItems = suggestion.items.map(itemId => wardrobe.find(item => item.id === itemId)).filter(Boolean) as z.infer<typeof ClothingSchema>[];
           if (outfitItems.length > 0) {
             console.log(`[generateOutfits] Generating image for suggestion: "${suggestion.title}" with ${outfitItems.length} items.`);
-            const generatedImageUrl = await generateOutfitImage.run(outfitItems) as unknown as string;
-            suggestion.generatedImageUrl = generatedImageUrl;
+            try {
+                const generatedImageUrl = await generateOutfitImage.run(outfitItems) as unknown as string;
+                suggestion.generatedImageUrl = generatedImageUrl;
+            } catch (imageGenError: any) {
+                console.error(`[generateOutfits] Image generation failed for suggestion: "${suggestion.title}". Error:`, imageGenError.message);
+                // Continue to next suggestion without a generated image for this one
+            }
           }
         }
         console.log('[generateOutfits] Flow completed successfully.');

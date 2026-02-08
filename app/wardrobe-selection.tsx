@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -12,7 +13,7 @@ const CATEGORIES = ['All', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes', '
 
 export default function WardrobeSelectionScreen() {
   const { event } = useLocalSearchParams<{ event: string }>();
-  const { items } = useWardrobe();
+  const { wardrobe } = useWardrobe(); // Correctly use 'wardrobe' from context
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [filter, setFilter] = useState('All');
 
@@ -22,132 +23,81 @@ export default function WardrobeSelectionScreen() {
     );
   };
 
-  const handleContinue = () => {
-    // Navigate to styling screen with selected items
-    // Since we can't pass the full objects easily via URL, we pass IDs
-    // The styling screen will need to filter the wardrobe by these IDs
+  const handleGenerate = () => {
+    if (selectedItems.length === 0) {
+        alert('Please select at least one item.');
+        return;
+    }
     router.push({
       pathname: '/styling',
-      params: { 
-          event, 
-          selectedItemIds: selectedItems.join(',') // Pass as comma-separated string
-      },
+      params: { event, selectedItemIds: JSON.stringify(selectedItems) },
     });
   };
 
-  const filteredItems = items.filter(item => {
-    if (filter === 'All') return true;
-    // This is a simplified filter. You might need to adjust the categories based on your data.
-    return item.category.toLowerCase().includes(filter.toLowerCase().slice(0, -1));
-  });
+  const filteredItems = wardrobe.filter(item => 
+    filter === 'All' || item.category.toLowerCase() === filter.toLowerCase()
+  );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <ChevronLeft size={24} color={Colors.white} />
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <ChevronLeft size={24} color={Colors.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Select Items</Text>
-        <TouchableOpacity onPress={handleContinue} disabled={selectedItems.length === 0}>
-          <Text style={[styles.continueButton, selectedItems.length === 0 && styles.disabledButton]}>
-            Continue
-          </Text>
-        </TouchableOpacity>
+        <View style={{ width: 40 }} />
       </View>
 
-      <View style={styles.filterBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {CATEGORIES.map(category => (
-            <TouchableOpacity
-              key={category}
-              style={[styles.filterButton, filter === category && styles.activeFilter]}
-              onPress={() => setFilter(category)}
-            >
-              <Text style={styles.filterText}>{category}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContainer}>
+        {CATEGORIES.map(category => (
+            <TouchableOpacity 
+                key={category} 
+                style={[styles.chip, filter === category && styles.chipSelected]}
+                onPress={() => setFilter(category)}>
+                <Text style={[styles.chipText, filter === category && styles.chipTextSelected]}>{category.toUpperCase()}</Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+        ))}
+      </ScrollView>
 
-      <ScrollView contentContainerStyle={styles.grid}>
+      <ScrollView contentContainerStyle={styles.gridContainer}>
         {filteredItems.map(item => (
-          <TouchableOpacity
-            key={item.id}
-            style={styles.itemContainer}
-            onPress={() => handleToggleItem(item.id)}
-          >
+          <TouchableOpacity key={item.id} style={styles.itemContainer} onPress={() => handleToggleItem(item.id)}>
             <Image source={{ uri: item.imageUri }} style={styles.itemImage} />
             {selectedItems.includes(item.id) && (
-              <View style={styles.overlay}>
-                <Check size={32} color={Colors.white} />
+              <View style={styles.selectionOverlay}>
+                <Check size={24} color={Colors.white} />
               </View>
             )}
           </TouchableOpacity>
         ))}
       </ScrollView>
+
+      {selectedItems.length > 0 && (
+        <View style={styles.footer}>
+            <TouchableOpacity style={styles.generateButton} onPress={handleGenerate}>
+                <Text style={styles.generateButtonText}>✨ GENERATE ({selectedItems.length})</Text>
+            </TouchableOpacity>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.richBlack,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-  },
-  headerTitle: {
-    color: Colors.white,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  continueButton: {
-    color: Colors.gold[400],
-    fontSize: 16,
-  },
-  disabledButton: {
-    color: Colors.gray[500],
-  },
-  filterBar: {
-    paddingVertical: 16,
-  },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginHorizontal: 8,
-    borderRadius: 16,
-    backgroundColor: Colors.gray[800],
-  },
-  activeFilter: {
-    backgroundColor: Colors.gold[400],
-  },
-  filterText: {
-    color: Colors.white,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 8,
-  },
-  itemContainer: {
-    width: '33.333%', 
-    aspectRatio: 1,
-    padding: 4,
-  },
-  itemImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 8,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 8,
-  },
+    container: { flex: 1, backgroundColor: Colors.richBlack },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
+    headerTitle: { color: Colors.white, fontSize: 16, fontWeight: 'bold' },
+    backButton: { padding: 8 },
+    filterContainer: { paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
+    chip: { paddingVertical: 8, paddingHorizontal: 16, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.gray[200] },
+    chipSelected: { backgroundColor: Colors.gold[400], borderColor: Colors.gold[400] },
+    chipText: { color: Colors.white, fontWeight: '500' },
+    chipTextSelected: { color: Colors.richBlack, fontWeight: 'bold' },
+    gridContainer: { flexDirection: 'row', flexWrap: 'wrap', padding: 8 },
+    itemContainer: { width: '33.33%'-16, aspectRatio: 1, padding: 8 },
+    itemImage: { flex: 1, width: '100%', height: '100%' },
+    selectionOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(212, 175, 55, 0.7)', justifyContent: 'center', alignItems: 'center' },
+    footer: { padding: 16, borderTopWidth: 1, borderColor: Colors.gray[100] },
+    generateButton: { backgroundColor: Colors.gold[500], padding: 16, alignItems: 'center' },
+    generateButtonText: { color: Colors.richBlack, fontSize: 16, fontWeight: 'bold' },
 });

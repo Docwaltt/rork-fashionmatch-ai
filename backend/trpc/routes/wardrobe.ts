@@ -71,9 +71,9 @@ export const wardrobeRouter = createTRPCRouter({
       if (!category || !color || !pattern || !material) {
         console.log("[Wardrobe] Missing some details, analyzing image...");
         try {
-          // Use the 'processClothingFn' Cloud Function
-          const processClothing = httpsCallable(functions, 'processClothingFn');
-          const result = await processClothing({ imgData: image });
+          // Use the 'analyzeImage' Cloud Function
+          const analyzeImage = httpsCallable(functions, 'analyzeImage');
+          const result = await analyzeImage({ imgData: image });
           analysisData = result.data;
           
           console.log("[Wardrobe] Analysis result data:", JSON.stringify(analysisData).substring(0, 200));
@@ -217,9 +217,9 @@ export const wardrobeRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       console.log("[Wardrobe] Received image for analysis");
       try {
-        // Use the 'processClothingFn' Cloud Function directly via SDK
-        const processClothing = httpsCallable(functions, 'processClothingFn');
-        const result = await processClothing({ imgData: input.imageUrl });
+        // Use the 'analyzeImage' Cloud Function directly via SDK
+        const analyzeImage = httpsCallable(functions, 'analyzeImage');
+        const result = await analyzeImage({ imgData: input.imageUrl, gender: input.gender });
         const data = result.data as any;
         
         console.log("[Wardrobe] Analysis result data:", JSON.stringify(data).substring(0, 200));
