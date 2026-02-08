@@ -88,6 +88,11 @@ export const processClothing = ai.defineFlow(
       
       const response = await ai.generate({
         model: googleAI.model('gemini-3-pro-image-preview'),
+        config: {
+          // Explicitly disabling thinkingConfig to avoid "Thinking level MEDIUM is not supported" error
+          // @ts-ignore
+          thinkingConfig: undefined,
+        } as any,
         prompt: [
           { text: "Analyze the clothing item in the image. Extract category, color, style, fabric, texture, silhouette, and material type." },
           { media: { url: imageForGemini } },
@@ -143,6 +148,10 @@ export const generateOutfitImage = ai.defineFlow(
 
     const response = await ai.generate({
         model: googleAI.model('gemini-3-pro-image-preview'),
+        config: {
+            // @ts-ignore
+            thinkingConfig: undefined,
+        } as any,
         prompt: [
             { text: "Create a realistic flat lay image of a complete outfit, arranging the provided clothing items logically from top to bottom. Ensure the final image is stylish and visually appealing, on a clean, neutral background." },
             ...imageParts,
@@ -176,6 +185,10 @@ export const generateOutfits = ai.defineFlow(
     try {
         const response = await ai.generate({
           model: googleAI.model('gemini-3-pro-preview'),
+          config: {
+            // @ts-ignore
+            thinkingConfig: undefined,
+          } as any,
           prompt: [
             {
               text: promptText
@@ -191,7 +204,7 @@ export const generateOutfits = ai.defineFlow(
         }
 
         for (const suggestion of suggestions) {
-          const outfitItems = suggestion.items.map(itemId => wardrobe.find(item => item.id === itemId)).filter(Boolean) as z.infer<typeof ClothingSchema>[];
+          const outfitItems = suggestion.items.map((itemId: string) => wardrobe.find(item => item.id === itemId)).filter(Boolean) as z.infer<typeof ClothingSchema>[];
           if (outfitItems.length > 0) {
             console.log(`[generateOutfits] Generating image for suggestion: "${suggestion.title}" with ${outfitItems.length} items.`);
             try {
