@@ -66,13 +66,20 @@ export async function callFirebaseFunction(functionName: string, data: any) {
        }
 
        // Handle possible prepended 'null' or other garbage before/after JSON
-       // We find the first '{' and the last '}' to isolate the JSON object
+       // Support both objects {} and arrays []
        const firstBrace = resultStr.indexOf('{');
+       const firstBracket = resultStr.indexOf('[');
        const lastBrace = resultStr.lastIndexOf('}');
+       const lastBracket = resultStr.lastIndexOf(']');
 
-       if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+       // Determine if it's an object or array based on which delimiter comes first
+       const isArray = firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace);
+       const startIdx = isArray ? firstBracket : firstBrace;
+       const endIdx = isArray ? lastBracket : lastBrace;
+
+       if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
            try {
-               const jsonPart = resultStr.substring(firstBrace, lastBrace + 1);
+               const jsonPart = resultStr.substring(startIdx, endIdx + 1);
                result = JSON.parse(jsonPart);
                console.log("[FirebaseUtils] Successfully recovered JSON from corrupted response");
            } catch (e) {
@@ -82,6 +89,12 @@ export async function callFirebaseFunction(functionName: string, data: any) {
            console.warn("[FirebaseUtils] Function returned string 'null'. Returning empty object.");
            result = {};
        }
+    }
+
+    // If result is an array, return it directly without unwrapping
+    if (Array.isArray(result)) {
+      console.log(`[FirebaseUtils] Function ${functionName} returned array with ${result.length} items`);
+      return result;
     }
 
     let iterations = 0;
