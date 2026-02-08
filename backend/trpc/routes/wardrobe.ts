@@ -23,7 +23,9 @@ const ClothingItemSchema = z.object({
   addedAt: z.number().optional(),
   name: z.string().optional(),
   materialType: z.string().optional(),
+  material: z.string().optional(),
   hasPattern: z.boolean().optional(),
+  pattern: z.string().optional(),
   patternDescription: z.string().optional(),
   isBackgroundRemoved: z.boolean().optional(),
   cleanedImage: z.string().optional(), // AI result field
