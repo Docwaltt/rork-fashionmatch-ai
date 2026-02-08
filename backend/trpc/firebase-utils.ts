@@ -47,7 +47,7 @@ export async function callFirebaseFunction(functionName: string, data: any) {
     });
 
     // Recursive unwrapping to extract the actual payload from Genkit/Firebase structures
-    let result = response.data;
+    let result: any = response.data;
 
     // Log raw response for debugging
     console.log(`[FirebaseUtils] Raw response keys:`, Object.keys(result || {}));

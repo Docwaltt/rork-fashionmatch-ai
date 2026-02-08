@@ -6,10 +6,10 @@ import {
   StyleSheet,
   ActivityIndicator,
   ScrollView,
-  Image,
   TouchableOpacity,
   Alert,
 } from "react-native";
+import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -28,7 +28,7 @@ interface OutfitSuggestion {
 
 export default function StylingScreen() {
   const router = useRouter();
-  const { wardrobe } = useWardrobe();
+  const { items: wardrobe } = useWardrobe();
   const { event, selectedItemId, selectedItemIds: selectedItemIdsJSON } = useLocalSearchParams<{
     event: string;
     selectedItemId?: string;
@@ -48,14 +48,14 @@ export default function StylingScreen() {
     if (selectedItemIdsJSON) {
       try {
         const ids = JSON.parse(selectedItemIdsJSON);
-        itemsToStyle = wardrobe.filter(item => ids.includes(item.id));
+        itemsToStyle = wardrobe.filter((item: ClothingItem) => ids.includes(item.id));
       } catch (e) {
         console.error("Failed to parse selectedItemIds:", e);
         return [];
       }
     } else if (selectedItemId) {
-      const selectedItem = wardrobe.find(item => item.id === selectedItemId);
-      itemsToStyle = selectedItem ? [selectedItem, ...wardrobe.filter(item => item.id !== selectedItemId)] : [];
+      const selectedItem = wardrobe.find((item: ClothingItem) => item.id === selectedItemId);
+      itemsToStyle = selectedItem ? [selectedItem, ...wardrobe.filter((item: ClothingItem) => item.id !== selectedItemId)] : [];
     } else {
         itemsToStyle = wardrobe;
     }
@@ -103,7 +103,7 @@ export default function StylingScreen() {
     if (!wardrobe) return null;
 
     const outfitItems = (suggestion.items || [])
-      .map(itemId => wardrobe.find(item => item.id === itemId))
+      .map(itemId => wardrobe.find((item: ClothingItem) => item.id === itemId))
       .filter((item): item is ClothingItem => !!item);
 
     return (
