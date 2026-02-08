@@ -85,8 +85,15 @@ export default function StylingScreen() {
       return;
     }
 
+    // Clean the wardrobe to remove large image data before sending to AI
+    // This prevents massive payloads and improves performance.
+    const cleanedWardrobe = stylingWardrobe.map(item => {
+      const { imageUri, cleanedImage, ...rest } = item;
+      return rest as ClothingItem;
+    });
+
     suggestOutfitMutation.mutate({
-      wardrobe: stylingWardrobe,
+      wardrobe: cleanedWardrobe,
       numSuggestions: 2,
     });
   };

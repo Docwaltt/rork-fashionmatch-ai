@@ -66,13 +66,26 @@ export async function callFirebaseFunction(functionName: string, data: any) {
        }
 
        // Handle possible prepended 'null' or other garbage before/after JSON
-       // We find the first '{' and the last '}' to isolate the JSON object
+       // We find the first occurrence of '{' or '[' and the last occurrence of '}' or ']'
        const firstBrace = resultStr.indexOf('{');
+       const firstBracket = resultStr.indexOf('[');
        const lastBrace = resultStr.lastIndexOf('}');
+       const lastBracket = resultStr.lastIndexOf(']');
 
-       if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+       let start = -1;
+       let end = -1;
+
+       if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+           start = firstBrace;
+           end = lastBrace;
+       } else if (firstBracket !== -1) {
+           start = firstBracket;
+           end = lastBracket;
+       }
+
+       if (start !== -1 && end !== -1 && end >= start) {
            try {
-               const jsonPart = resultStr.substring(firstBrace, lastBrace + 1);
+               const jsonPart = resultStr.substring(start, end + 1);
                result = JSON.parse(jsonPart);
                console.log("[FirebaseUtils] Successfully recovered JSON from corrupted response");
            } catch (e) {
