@@ -97,6 +97,12 @@ export async function callFirebaseFunction(functionName: string, data: any) {
        }
     }
 
+    // If result is an array, return it directly without unwrapping
+    if (Array.isArray(result)) {
+      console.log(`[FirebaseUtils] Function ${functionName} returned array with ${result.length} items`);
+      return result;
+    }
+
     let iterations = 0;
     // Specific unwrapping for Firebase/Genkit structures
     while (result && typeof result === 'object' && iterations < 3) {
