@@ -84,10 +84,10 @@ export const processClothing = ai.defineFlow(
     }
 
     try {
-      console.log(`LOG: Sending to Gemini with model gemini-3-pro-image-preview...`);
+      console.log(`LOG: Sending to Gemini with model gemini-1.5-flash...`);
       
       const response = await ai.generate({
-        model: googleAI.model('gemini-3-pro-image-preview'),
+        model: googleAI.model('gemini-1.5-flash'),
         prompt: [
           { text: "Analyze the clothing item in the image. Extract category, color, style, fabric, texture, silhouette, and material type." },
           { media: { url: imageForGemini } },
@@ -124,33 +124,11 @@ export const generateOutfitImage = ai.defineFlow(
     outputSchema: z.string(),
   },
   async (items: z.infer<typeof ClothingSchema>[]) => {
-    if (items.length === 0) {
-      return "";
-    }
-
-    const imageParts = items.map(item => {
-        const imageUrl = item.cleanedImage || item.imageUri;
-        if (!imageUrl) {
-            console.error(`[generateOutfitImage] CRITICAL: Item with ID ${item.id} has no cleanedImage or imageUri. Cannot generate outfit.`);
-            return null;
-        }
-        return { media: { url: imageUrl } };
-    }).filter((part): part is { media: { url: string } } => part !== null);
-
-    if (imageParts.length !== items.length) {
-        throw new Error("Could not generate outfit image because some items were missing image data.");
-    }
-
-    const response = await ai.generate({
-        model: googleAI.model('gemini-3-pro-image-preview'),
-        prompt: [
-            { text: "Create a realistic flat lay image of a complete outfit, arranging the provided clothing items logically from top to bottom. Ensure the final image is stylish and visually appealing, on a clean, neutral background." },
-            ...imageParts,
-        ],
-        output: { format: 'uri' },
-    });
-
-    return response.output || "";
+    // Gemini 1.5 does not support image generation natively.
+    // To support image generation, a plugin like Imagen would be required.
+    // For now, we return empty so the frontend uses its fallback grid display.
+    console.log(`[generateOutfitImage] Image generation requested for ${items.length} items. Skipping as it is not supported by gemini-1.5-flash.`);
+    return "";
   }
 );
 
@@ -175,7 +153,7 @@ export const generateOutfits = ai.defineFlow(
 
     try {
         const response = await ai.generate({
-          model: googleAI.model('gemini-3-pro-preview'),
+          model: googleAI.model('gemini-1.5-flash'),
           prompt: [
             {
               text: promptText

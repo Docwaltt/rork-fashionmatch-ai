@@ -9,19 +9,26 @@ const auth = new GoogleAuth();
  */
 export async function callFirebaseFunction(functionName: string, data: any) {
   const projectId = process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || 'closet-app-1337';
-  const region = 'us-central1';
 
-  // Default URL for Firebase Functions (v2 usually follows this pattern)
-  let url = `https://${functionName}-pfc64ufnsq-uc.a.run.app`; // Typical Cloud Run URL for Genkit/Firebase v2
+  // Allow direct URL override via env var: e.g. FUNCTION_ANALYZEIMAGE_URL
+  // Using a more explicit mapping to avoid "no-dynamic-env-var" lint error
+  let url: string | undefined;
+  if (functionName === 'analyzeImage') url = process.env.FUNCTION_ANALYZEIMAGE_URL;
+  if (functionName === 'suggestOutfit') url = process.env.FUNCTION_SUGGESTOUTFIT_URL;
+  if (functionName === 'generateOutfitsFn') url = process.env.FUNCTION_GENERATEOUTFITSFN_URL;
+  if (functionName === 'processClothingFn') url = process.env.FUNCTION_PROCESSCLOTHINGFN_URL;
 
-  // Specific overrides based on memory and known deployments
-  if (functionName === 'analyzeImage' || functionName === 'processClothingFn' || functionName === 'analyze') {
-    url = 'https://processclothingfn-pfc64ufnsq-uc.a.run.app';
-  } else if (functionName === 'generateOutfitsFn' || functionName === 'suggestOutfit') {
-    url = `https://us-central1-${projectId}.cloudfunctions.net/generateOutfitsFn`;
-  } else {
-    // Fallback pattern
-    url = `https://us-central1-${projectId}.cloudfunctions.net/${functionName}`;
+  if (!url) {
+    // Specific overrides based on known deployments
+    if (functionName === 'analyzeImage' || functionName === 'processClothingFn' || functionName === 'analyze') {
+      // Prioritize the custom Cloud Run URL if it exists, else fallback to standard pattern
+      url = 'https://processclothingfn-pfc64ufnsq-uc.a.run.app';
+    } else if (functionName === 'generateOutfitsFn' || functionName === 'suggestOutfit') {
+      url = `https://us-central1-${projectId}.cloudfunctions.net/generateOutfitsFn`;
+    } else {
+      // Fallback pattern for Firebase Functions v2 / Cloud Run
+      url = `https://${functionName}-pfc64ufnsq-uc.a.run.app`;
+    }
   }
 
   console.log(`[FirebaseUtils] Calling function: ${functionName} at ${url}`);
