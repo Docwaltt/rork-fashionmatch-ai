@@ -59,21 +59,28 @@ export async function callFirebaseFunction(functionName: string, data: any) {
 
     if (typeof result !== 'object') {
        const resultStr = String(result);
-       console.error(`[FirebaseUtils] Expected object, got: ${resultStr.substring(0, 100)}`);
+       console.error(`[FirebaseUtils] Expected object, got: ${resultStr.substring(0, 500)}`);
 
        if (resultStr.includes('<html')) {
            throw new Error("Cloud Function returned an HTML error page. Check function logs for crashes.");
        }
 
-       // Handle possible prepended 'null' or other garbage before JSON
-       if (resultStr.includes('{')) {
+       // Handle possible prepended 'null' or other garbage before/after JSON
+       // We find the first '{' and the last '}' to isolate the JSON object
+       const firstBrace = resultStr.indexOf('{');
+       const lastBrace = resultStr.lastIndexOf('}');
+
+       if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
            try {
-               const jsonPart = resultStr.substring(resultStr.indexOf('{'));
+               const jsonPart = resultStr.substring(firstBrace, lastBrace + 1);
                result = JSON.parse(jsonPart);
                console.log("[FirebaseUtils] Successfully recovered JSON from corrupted response");
            } catch (e) {
-               console.error("[FirebaseUtils] Failed to recover JSON from response string");
+               console.error("[FirebaseUtils] Failed to recover JSON from response string. It might not be valid JSON.");
            }
+       } else if (resultStr === "null") {
+           console.warn("[FirebaseUtils] Function returned string 'null'. Returning empty object.");
+           result = {};
        }
     }
 

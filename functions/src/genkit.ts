@@ -185,7 +185,13 @@ export const generateOutfits = ai.defineFlow(
       return [];
     }
 
-    const promptText = `Create ${numSuggestions} stylish and complete outfits from the provided wardrobe items. For each outfit, provide a title, a brief one-sentence description, a detailed reason explaining why the outfit is a good fashion match (considering color theory, style harmony, and occasion suitability), and the list of item IDs. Wardrobe: ${JSON.stringify(wardrobe, null, 2)}`;
+    // Strip large image data from wardrobe items to prevent massive prompts and timeouts
+    const cleanWardrobe = wardrobe.map(item => {
+      const { imageUri, cleanedImage, ...rest } = item;
+      return rest;
+    });
+
+    const promptText = `Create ${numSuggestions} stylish and complete outfits from the provided wardrobe items. For each outfit, provide a title, a brief one-sentence description, a detailed reason explaining why the outfit is a good fashion match (considering color theory, style harmony, and occasion suitability), and the list of item IDs. Wardrobe: ${JSON.stringify(cleanWardrobe, null, 2)}`;
     console.log('[generateOutfits] Prompt text created. Length:', promptText.length);
 
     try {
