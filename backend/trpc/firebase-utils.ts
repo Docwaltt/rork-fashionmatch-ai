@@ -43,17 +43,18 @@ export async function callFirebaseFunction(functionName: string, data: any) {
       url,
       method: 'POST',
       data: { data }, // standard wrapper for Firebase Callable-like onRequest functions
-      timeout: 300000, // 5 minutes timeout
+      timeout: 600000, // 10 minutes timeout
     });
 
     // Recursive unwrapping to extract the actual payload from Genkit/Firebase structures
     let result: any = response.data;
 
     // Log raw response for debugging
-    console.log(`[FirebaseUtils] Raw response keys:`, Object.keys(result || {}));
+    console.log(`[FirebaseUtils] Raw response keys:`, result && typeof result === 'object' ? Object.keys(result) : 'none');
 
     let iterations = 0;
-    while (result && (result.result !== undefined || result.data !== undefined) && iterations < 5) {
+    // Only unwrap if result is an object and not null, to avoid spreading strings later
+    while (result && typeof result === 'object' && (result.result !== undefined || result.data !== undefined) && iterations < 5) {
       result = result.result !== undefined ? result.result : result.data;
       iterations++;
     }

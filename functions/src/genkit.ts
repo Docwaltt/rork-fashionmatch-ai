@@ -203,7 +203,8 @@ export const generateOutfits = ai.defineFlow(
             console.warn('[generateOutfits] AI returned 0 suggestions. Response:', JSON.stringify(response, null, 2));
         }
 
-        for (const suggestion of suggestions) {
+        // Parallelize image generation to avoid timeouts
+        await Promise.all(suggestions.map(async (suggestion) => {
           const outfitItems = suggestion.items.map((itemId: string) => wardrobe.find(item => item.id === itemId)).filter(Boolean) as z.infer<typeof ClothingSchema>[];
           if (outfitItems.length > 0) {
             console.log(`[generateOutfits] Generating image for suggestion: "${suggestion.title}" with ${outfitItems.length} items.`);
@@ -215,7 +216,7 @@ export const generateOutfits = ai.defineFlow(
                 // Continue to next suggestion without a generated image for this one
             }
           }
-        }
+        }));
         console.log('[generateOutfits] Flow completed successfully.');
         return suggestions;
 

@@ -86,27 +86,25 @@ export const processClothingFn = onRequest({
   let input = req.body;
 
   // Handle cases where body might not be parsed automatically
-  if (typeof input === 'string') {
+  if (typeof input === 'string' && input.trim().startsWith('{')) {
     try {
       input = JSON.parse(input);
     } catch (e) {
-      console.log("Failed to parse body string");
+      console.log("Failed to parse body string as JSON");
     }
   }
 
   // If wrapped in "data" (Callable format), unwrap it
-  if (input && typeof input === 'object' && input.data) {
+  // But be careful not to unwrap if 'data' IS the payload (e.g. image string)
+  if (input && typeof input === 'object' && input.data && !input.imgData && !input.image) {
     input = input.data;
   }
 
   // Map potential field names to 'imgData'
   if (input && typeof input === 'object') {
-    if (input.image) {
-      input.imgData = input.image;
-    }
-    if (input.imageBase64) {
-      input.imgData = input.imageBase64;
-    }
+    if (!input.imgData && input.image) input.imgData = input.image;
+    if (!input.imgData && input.imageUrl) input.imgData = input.imageUrl;
+    if (!input.imgData && input.imageBase64) input.imgData = input.imageBase64;
   }
 
   if (!input || !input.imgData) {
