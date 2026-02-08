@@ -45,7 +45,7 @@ export const analyzeImage = onCall({
 // Export generateOutfits as an HTTP function for more control
 export const generateOutfitsFn = onRequest({
   memory: '2GiB',
-  timeoutSeconds: 300,
+  timeoutSeconds: 540, // Increased timeout
   region: 'us-central1',
   invoker: 'public',
   cors: true, // Enable CORS for direct client calls
