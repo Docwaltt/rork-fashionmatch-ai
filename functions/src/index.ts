@@ -33,8 +33,9 @@ export const analyzeImage = onCall({
         console.warn("WARNING: No image data found in request!");
     }
 
+    console.log("Starting processClothing flow...");
     const result = await processClothing.run(request.data);
-    console.log("processClothing result:", JSON.stringify(result).substring(0, 500) + "...");
+    console.log("processClothing flow completed. Result keys:", Object.keys(result || {}));
     return result;
   } catch (error: any) {
     console.error("analyzeImage error:", error);
@@ -56,9 +57,10 @@ export const generateOutfitsFn = onRequest({
     // The tRPC client for onRequest will wrap the input in a 'data' object.
     const input = req.body.data;
     
+    console.log("Starting generateOutfits flow...");
     const result = await generateOutfits.run(input);
     
-    console.log(`[generateOutfitsFn] Received ${Array.isArray(result) ? result.length : 'non-array'} suggestions from flow.`);
+    console.log(`[generateOutfitsFn] Flow completed. Received ${Array.isArray(result) ? result.length : 'non-array'} suggestions.`);
     
     // For onRequest, we need to send the response back manually.
     res.status(200).json(result);
@@ -115,7 +117,9 @@ export const processClothingFn = onRequest({
 
   try {
     // Invoke the Genkit flow directly
+    console.log("Starting processClothing flow (onRequest)...");
     const result = await processClothing.run(input);
+    console.log("processClothing flow completed. Result keys:", Object.keys(result || {}));
     
     res.status(200).json(result);
   } catch (error: any) {
