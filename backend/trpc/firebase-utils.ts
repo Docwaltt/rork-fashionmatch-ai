@@ -44,10 +44,39 @@ export async function callFirebaseFunction(functionName: string, data: any) {
       method: 'POST',
       data: { data }, // standard wrapper for Firebase Callable-like onRequest functions
       timeout: 120000, // 2 minutes timeout
+      responseType: 'text', // Get raw text to handle malformed responses
     });
 
-    // Recursive unwrapping to extract the actual payload from Genkit/Firebase structures
-    let result: any = response.data;
+    // Parse response - handle malformed JSON like "null{...}"
+    let result: any;
+    const rawText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+    
+    console.log(`[FirebaseUtils] Raw response preview: ${rawText.substring(0, 200)}`);
+    
+    // Try to parse as-is first
+    try {
+      result = JSON.parse(rawText);
+    } catch (parseError) {
+      console.log(`[FirebaseUtils] Direct JSON parse failed, attempting recovery...`);
+      
+      // Handle "null{...}" or other prefix garbage
+      const firstBrace = rawText.indexOf('{');
+      const firstBracket = rawText.indexOf('[');
+      const lastBrace = rawText.lastIndexOf('}');
+      const lastBracket = rawText.lastIndexOf(']');
+      
+      const isArray = firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace);
+      const startIdx = isArray ? firstBracket : firstBrace;
+      const endIdx = isArray ? lastBracket : lastBrace;
+      
+      if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+        const jsonPart = rawText.substring(startIdx, endIdx + 1);
+        result = JSON.parse(jsonPart);
+        console.log(`[FirebaseUtils] Successfully recovered JSON from malformed response`);
+      } else {
+        throw parseError;
+      }
+    }
 
     // Log response type for diagnostics
     console.log(`[FirebaseUtils] Function ${functionName} responded with type: ${typeof result}`);
@@ -57,38 +86,9 @@ export async function callFirebaseFunction(functionName: string, data: any) {
       return {};
     }
 
-    if (typeof result !== 'object') {
-       const resultStr = String(result);
-       console.error(`[FirebaseUtils] Expected object, got: ${resultStr.substring(0, 500)}`);
-
-       if (resultStr.includes('<html')) {
-           throw new Error("Cloud Function returned an HTML error page. Check function logs for crashes.");
-       }
-
-       // Handle possible prepended 'null' or other garbage before/after JSON
-       // Support both objects {} and arrays []
-       const firstBrace = resultStr.indexOf('{');
-       const firstBracket = resultStr.indexOf('[');
-       const lastBrace = resultStr.lastIndexOf('}');
-       const lastBracket = resultStr.lastIndexOf(']');
-
-       // Determine if it's an object or array based on which delimiter comes first
-       const isArray = firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace);
-       const startIdx = isArray ? firstBracket : firstBrace;
-       const endIdx = isArray ? lastBracket : lastBrace;
-
-       if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-           try {
-               const jsonPart = resultStr.substring(startIdx, endIdx + 1);
-               result = JSON.parse(jsonPart);
-               console.log("[FirebaseUtils] Successfully recovered JSON from corrupted response");
-           } catch (e) {
-               console.error("[FirebaseUtils] Failed to recover JSON from response string. It might not be valid JSON.");
-           }
-       } else if (resultStr === "null") {
-           console.warn("[FirebaseUtils] Function returned string 'null'. Returning empty object.");
-           result = {};
-       }
+    // Check for HTML error pages
+    if (typeof result === 'string' && result.includes('<html')) {
+      throw new Error("Cloud Function returned an HTML error page. Check function logs for crashes.");
     }
 
     // If result is an array, return it directly without unwrapping
