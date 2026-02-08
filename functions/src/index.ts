@@ -33,8 +33,9 @@ export const analyzeImage = onCall({
         console.warn("WARNING: No image data found in request!");
     }
 
+    console.log("Starting processClothing flow...");
     const result = await processClothing.run(request.data);
-    console.log("processClothing result:", JSON.stringify(result).substring(0, 500) + "...");
+    console.log("processClothing flow completed. Result keys:", Object.keys(result || {}));
     return result;
   } catch (error: any) {
     console.error("analyzeImage error:", error);
@@ -56,12 +57,13 @@ export const generateOutfitsFn = onRequest({
     // The tRPC client for onRequest will wrap the input in a 'data' object.
     const input = req.body.data;
     
+    console.log("Starting generateOutfits flow...");
     const result = await generateOutfits.run(input);
     
-    console.log(`[generateOutfitsFn] Received ${Array.isArray(result) ? result.length : 'non-array'} suggestions from flow.`);
+    console.log(`[generateOutfitsFn] Flow completed. Received ${Array.isArray(result) ? result.length : 'non-array'} suggestions.`);
     
     // For onRequest, we need to send the response back manually.
-    res.status(200).json({ result: result }); // tRPC expects a 'result' wrapper
+    res.status(200).json(result);
   } catch (error: any) {
     console.error("generateOutfitsFn error:", error);
     res.status(500).json({ error: { message: error.message } }); // tRPC error format
@@ -86,27 +88,25 @@ export const processClothingFn = onRequest({
   let input = req.body;
 
   // Handle cases where body might not be parsed automatically
-  if (typeof input === 'string') {
+  if (typeof input === 'string' && input.trim().startsWith('{')) {
     try {
       input = JSON.parse(input);
     } catch (e) {
-      console.log("Failed to parse body string");
+      console.log("Failed to parse body string as JSON");
     }
   }
 
   // If wrapped in "data" (Callable format), unwrap it
-  if (input && typeof input === 'object' && input.data) {
+  // But be careful not to unwrap if 'data' IS the payload (e.g. image string)
+  if (input && typeof input === 'object' && input.data && !input.imgData && !input.image) {
     input = input.data;
   }
 
   // Map potential field names to 'imgData'
   if (input && typeof input === 'object') {
-    if (input.image) {
-      input.imgData = input.image;
-    }
-    if (input.imageBase64) {
-      input.imgData = input.imageBase64;
-    }
+    if (!input.imgData && input.image) input.imgData = input.image;
+    if (!input.imgData && input.imageUrl) input.imgData = input.imageUrl;
+    if (!input.imgData && input.imageBase64) input.imgData = input.imageBase64;
   }
 
   if (!input || !input.imgData) {
@@ -117,7 +117,9 @@ export const processClothingFn = onRequest({
 
   try {
     // Invoke the Genkit flow directly
+    console.log("Starting processClothing flow (onRequest)...");
     const result = await processClothing.run(input);
+    console.log("processClothing flow completed. Result keys:", Object.keys(result || {}));
     
     res.status(200).json(result);
   } catch (error: any) {

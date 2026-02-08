@@ -43,27 +43,62 @@ export async function callFirebaseFunction(functionName: string, data: any) {
       url,
       method: 'POST',
       data: { data }, // standard wrapper for Firebase Callable-like onRequest functions
-      timeout: 300000, // 5 minutes timeout
+      timeout: 120000, // 2 minutes timeout
     });
 
     // Recursive unwrapping to extract the actual payload from Genkit/Firebase structures
     let result: any = response.data;
 
-    // Log raw response for debugging
-    console.log(`[FirebaseUtils] Raw response keys:`, Object.keys(result || {}));
+    // Log response type for diagnostics
+    console.log(`[FirebaseUtils] Function ${functionName} responded with type: ${typeof result}`);
+
+    if (result === null || result === undefined) {
+      console.warn(`[FirebaseUtils] Function ${functionName} returned null/undefined`);
+      return {};
+    }
+
+    if (typeof result !== 'object') {
+       const resultStr = String(result);
+       console.error(`[FirebaseUtils] Expected object, got: ${resultStr.substring(0, 100)}`);
+
+       if (resultStr.includes('<html')) {
+           throw new Error("Cloud Function returned an HTML error page. Check function logs for crashes.");
+       }
+
+       // Handle possible prepended 'null' or other garbage before JSON
+       if (resultStr.includes('{')) {
+           try {
+               const jsonPart = resultStr.substring(resultStr.indexOf('{'));
+               result = JSON.parse(jsonPart);
+               console.log("[FirebaseUtils] Successfully recovered JSON from corrupted response");
+           } catch (e) {
+               console.error("[FirebaseUtils] Failed to recover JSON from response string");
+           }
+       }
+    }
 
     let iterations = 0;
-    while (result && (result.result !== undefined || result.data !== undefined) && iterations < 5) {
-      result = result.result !== undefined ? result.result : result.data;
+    // Specific unwrapping for Firebase/Genkit structures
+    while (result && typeof result === 'object' && iterations < 3) {
+      if (result.result !== undefined) {
+          result = result.result;
+      } else if (result.data !== undefined && !result.category && !Array.isArray(result)) {
+          // Only unwrap 'data' if it looks like a wrapper (not a result with a 'data' field)
+          result = result.data;
+      } else {
+          break;
+      }
       iterations++;
     }
 
-    return result;
+    // Ensure we return an object if possible to avoid 'spreading a string' issues in callers
+    return result !== null && result !== undefined ? result : {};
   } catch (error: any) {
     console.error(`[FirebaseUtils] Error calling function ${functionName}:`, error.message);
     if (error.response) {
       console.error(`[FirebaseUtils] Response status: ${error.response.status}`);
-      console.error(`[FirebaseUtils] Response data:`, JSON.stringify(error.response.data).substring(0, 500));
+      const errorData = typeof error.response.data === 'string' ? error.response.data : JSON.stringify(error.response.data);
+      console.error(`[FirebaseUtils] Response data:`, errorData.substring(0, 500));
     }
     throw error;
   }

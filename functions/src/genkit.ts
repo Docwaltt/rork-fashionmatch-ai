@@ -41,11 +41,17 @@ async function removeBackgroundWithClipdrop(imageBuffer: Buffer): Promise<string
   const formData = new FormData();
   formData.append('image_file', new Blob([new Uint8Array(imageBuffer)], { type: 'image/jpeg' }), 'image.jpg');
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout
+
   const response = await fetch('https://clipdrop-api.co/remove-background/v1', {
     method: 'POST',
     headers: { 'x-api-key': clipdropApiKey },
     body: formData,
+    signal: controller.signal,
   });
+
+  clearTimeout(timeoutId);
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -89,9 +95,9 @@ export const processClothing = ai.defineFlow(
       const response = await ai.generate({
         model: googleAI.model('gemini-3-pro-image-preview'),
         config: {
-          // Explicitly disabling thinkingConfig to avoid "Thinking level MEDIUM is not supported" error
+          // Setting thinkingLevel to LOW as MEDIUM is reported as unsupported in logs
           // @ts-ignore
-          thinkingConfig: undefined,
+          thinkingConfig: { thinkingLevel: 'LOW' },
         } as any,
         prompt: [
           { text: "Analyze the clothing item in the image. Extract category, color, style, fabric, texture, silhouette, and material type." },
@@ -150,7 +156,7 @@ export const generateOutfitImage = ai.defineFlow(
         model: googleAI.model('gemini-3-pro-image-preview'),
         config: {
             // @ts-ignore
-            thinkingConfig: undefined,
+            thinkingConfig: { thinkingLevel: 'LOW' },
         } as any,
         prompt: [
             { text: "Create a realistic flat lay image of a complete outfit, arranging the provided clothing items logically from top to bottom. Ensure the final image is stylish and visually appealing, on a clean, neutral background." },
@@ -187,7 +193,7 @@ export const generateOutfits = ai.defineFlow(
           model: googleAI.model('gemini-3-pro-preview'),
           config: {
             // @ts-ignore
-            thinkingConfig: undefined,
+            thinkingConfig: { thinkingLevel: 'LOW' },
           } as any,
           prompt: [
             {
@@ -203,18 +209,12 @@ export const generateOutfits = ai.defineFlow(
             console.warn('[generateOutfits] AI returned 0 suggestions. Response:', JSON.stringify(response, null, 2));
         }
 
+        // Disabled image generation because Gemini 3 Pro is a multimodal model (understanding images)
+        // but not an image generation model (like Imagen). Using it for image generation output
+        // was causing the indefinite hangs (9+ minutes) and timeouts reported.
+        // The app will now return suggestions instantly and use the frontend grid fallback.
         for (const suggestion of suggestions) {
-          const outfitItems = suggestion.items.map((itemId: string) => wardrobe.find(item => item.id === itemId)).filter(Boolean) as z.infer<typeof ClothingSchema>[];
-          if (outfitItems.length > 0) {
-            console.log(`[generateOutfits] Generating image for suggestion: "${suggestion.title}" with ${outfitItems.length} items.`);
-            try {
-                const generatedImageUrl = await generateOutfitImage.run(outfitItems) as unknown as string;
-                suggestion.generatedImageUrl = generatedImageUrl;
-            } catch (imageGenError: any) {
-                console.error(`[generateOutfits] Image generation failed for suggestion: "${suggestion.title}". Error:`, imageGenError.message);
-                // Continue to next suggestion without a generated image for this one
-            }
-          }
+          suggestion.generatedImageUrl = "";
         }
         console.log('[generateOutfits] Flow completed successfully.');
         return suggestions;
