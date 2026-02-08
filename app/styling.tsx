@@ -62,13 +62,13 @@ export default function StylingScreen() {
     return itemsToStyle;
   }, [wardrobe, selectedItemId, selectedItemIdsJSON]);
 
-  const generateOutfitMutation = trpc.wardrobe.generateOutfit.useMutation({
+  const suggestOutfitMutation = trpc.wardrobe.suggestOutfit.useMutation({
     onSuccess: (data) => {
       const newSuggestions = (data || []) as OutfitSuggestion[];
       setSuggestions(newSuggestions);
     },
     onError: (error) => {
-      console.error("Generate outfit mutation error:", error);
+      console.error("Suggest outfit mutation error:", error);
       Alert.alert(
         "Generation Failed",
         "Could not generate outfit suggestions. Please try again later."
@@ -85,7 +85,7 @@ export default function StylingScreen() {
       return;
     }
 
-    generateOutfitMutation.mutate({
+    suggestOutfitMutation.mutate({
       wardrobe: stylingWardrobe,
       numSuggestions: 2,
     });
@@ -102,7 +102,7 @@ export default function StylingScreen() {
     // Guard against wardrobe being unavailable during render
     if (!wardrobe) return null;
 
-    const outfitItems = suggestion.items
+    const outfitItems = (suggestion.items || [])
       .map(itemId => wardrobe.find(item => item.id === itemId))
       .filter((item): item is ClothingItem => !!item);
 
@@ -133,7 +133,7 @@ export default function StylingScreen() {
     );
   };
 
-  const isLoading = generateOutfitMutation.isPending;
+  const isLoading = suggestOutfitMutation.isPending;
   const hasSuggestions = suggestions.length > 0;
 
   // Special handling for the initial loading state before we even try to generate
