@@ -82,7 +82,10 @@ export default function AddItemScreen() {
 
   const analyzeImageMutation = trpc.wardrobe.analyze.useMutation({
     onSuccess: (data) => {
+      console.log("[Add] AI Analysis Success. Keys received:", Object.keys(data || {}));
+
       if (!data || typeof data !== 'object') {
+        console.error("[Add] AI analysis returned invalid data format:", typeof data);
         setAnalysisError("AI analysis returned invalid data. Please select manually.");
         setAnalysisSuccess(false);
         setIsProcessing(false);
@@ -126,6 +129,7 @@ export default function AddItemScreen() {
       setIsProcessing(false);
     },
     onError: (error) => {
+      console.error("[Add] AI Analysis Error:", error);
       setIsProcessing(false);
       setAnalysisError(error.message || "AI analysis unavailable. Please select category manually.");
       setAnalysisSuccess(false);

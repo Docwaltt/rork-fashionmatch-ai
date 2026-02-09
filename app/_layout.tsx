@@ -104,10 +104,21 @@ export default function RootLayout() {
 
     console.log("[RootLayout] Initializing tRPC client with URL:", trpcUrl);
 
+    // Safety guard to ensure the URL is valid before client creation
+    let finalUrl = trpcUrl;
+    try {
+        if (finalUrl && !finalUrl.startsWith('http') && !finalUrl.startsWith('/')) {
+            console.warn("[RootLayout] Invalid tRPC URL format, prepending protocol:", finalUrl);
+            finalUrl = `https://${finalUrl}`;
+        }
+    } catch (e) {
+        console.error("[RootLayout] URL safety guard error:", e);
+    }
+
     return trpc.createClient({
       links: [
         httpBatchLink({
-          url: trpcUrl,
+          url: finalUrl,
           transformer,
         }),
       ],

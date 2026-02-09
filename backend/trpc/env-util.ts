@@ -30,13 +30,25 @@ export function initializeEnv() {
 
       const saveKey = (key: string, val: string) => {
         let finalVal = val.trim();
-        // Handle surrounding quotes
-        if ((finalVal.startsWith('"') && finalVal.endsWith('"')) ||
-            (finalVal.startsWith("'") && finalVal.endsWith("'"))) {
+        // Handle surrounding quotes more robustly
+        if (finalVal.startsWith('"') && finalVal.endsWith('"')) {
           finalVal = finalVal.substring(1, finalVal.length - 1);
+          // If it was a JSON-escaped string (common in some env setups)
+          try {
+              if (finalVal.includes('\\')) {
+                  const parsed = JSON.parse('"' + finalVal + '"');
+                  if (typeof parsed === 'string') finalVal = parsed;
+              }
+          } catch (e) {
+              // Fallback to simple unescape if JSON.parse fails
+              finalVal = finalVal.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+          }
+        } else if (finalVal.startsWith("'") && finalVal.endsWith("'")) {
+          finalVal = finalVal.substring(1, finalVal.length - 1);
+          finalVal = finalVal.replace(/\\n/g, '\n');
+        } else {
+          finalVal = finalVal.replace(/\\n/g, '\n');
         }
-        // Unescape \n
-        finalVal = finalVal.replace(/\\n/g, '\n');
 
         if (!process.env[key] || process.env[key] === 'undefined' || process.env[key] === '') {
           process.env[key] = finalVal;
