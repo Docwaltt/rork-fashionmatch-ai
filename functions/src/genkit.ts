@@ -186,8 +186,8 @@ export const generateOutfits = ai.defineFlow(
     }
 
     // Strip large image data from wardrobe items to prevent massive prompts and timeouts
-    const cleanWardrobe = wardrobe.map(item => {
-      const { imageUri, cleanedImage, ...rest } = item;
+    const cleanWardrobe = (wardrobe || []).map((item: any) => {
+      const { imageUri, cleanedImage, thumbnailUri, ...rest } = item;
       return rest;
     });
 
