@@ -198,10 +198,13 @@ export const generateOutfits = ai.defineFlow(
 
     let promptText = `Create up to ${numSuggestions} stylish and complete outfits for a ${event || 'general'} occasion using the provided wardrobe items.
     An outfit should ideally consist of a top and a bottom, or a dress and shoes, etc.
-    Be creative and try to suggest the best possible combinations for a ${event || 'general'} setting even if the wardrobe is limited.`;
+    If the wardrobe is very limited and a complete outfit (top + bottom) cannot be formed, suggest the best possible combination or even a single key piece with a detailed explanation of how to style it.
+    Be creative and try to suggest the best possible combinations for a ${event || 'general'} setting.`;
 
     if (referenceItemId) {
-      promptText += `\n\nIMPORTANT: Every suggested outfit MUST include the item with ID "${referenceItemId}". Match other clothes from the wardrobe with this specific piece.`;
+      const refItem = cleanWardrobe.find((i: any) => i.id === referenceItemId);
+      const refDesc = refItem ? `(a ${refItem.category} in ${refItem.color || 'unspecified color'})` : '';
+      promptText += `\n\nIMPORTANT: Every suggested outfit MUST include the item with ID "${referenceItemId}" ${refDesc}. Match other clothes from the wardrobe with this specific piece. If no other items match well, still include it and suggest what kind of items the user should look for to complete the look.`;
     }
 
     promptText += `\n\nFor each outfit, provide:
@@ -214,6 +217,7 @@ export const generateOutfits = ai.defineFlow(
     console.log('[generateOutfits] Prompt text created. Length:', promptText.length);
 
     try {
+        console.log('[generateOutfits] Calling ai.generate with prompt length:', promptText.length);
         const response = await ai.generate({
           model: googleAI.model('gemini-3-pro-preview'),
           config: {
