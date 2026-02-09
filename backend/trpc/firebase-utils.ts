@@ -22,11 +22,10 @@ export async function callFirebaseFunction(functionName: string, data: any) {
     // Specific naming logic based on project conventions
     const isStandardCallable = functionName === 'analyzeImage';
 
-    if (isStandardCallable) {
-      // Standard Firebase v2 Callable URL pattern
-      url = `https://${functionName}-pfc64ufnsq-uc.a.run.app`;
-    } else if (functionName === 'generateOutfitsFn' || functionName === 'suggestOutfit') {
-      url = `https://${region}-${projectId}.cloudfunctions.net/generateOutfitsFn`;
+    if (isStandardCallable || functionName === 'generateOutfitsFn' || functionName === 'suggestOutfit') {
+      // Standard Firebase v2 Callable URL pattern (Cloud Run format)
+      const name = (functionName === 'suggestOutfit') ? 'generateOutfitsFn' : functionName;
+      url = `https://${name.toLowerCase()}-pfc64ufnsq-uc.a.run.app`;
     } else if (functionName === 'processClothingFn' || functionName === 'analyze') {
       url = `https://processclothingfn-pfc64ufnsq-uc.a.run.app`;
     } else {
@@ -47,7 +46,7 @@ export async function callFirebaseFunction(functionName: string, data: any) {
       responseType: 'text', // Get raw text to handle malformed responses
     });
 
-    // Parse response - handle malformed JSON like "null{...}"
+    // Parse response - handle malformed JSON like "null{...}" or other junk
     let result: any;
     const rawText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
     
@@ -56,23 +55,41 @@ export async function callFirebaseFunction(functionName: string, data: any) {
     // Try to parse as-is first
     try {
       result = JSON.parse(rawText);
-    } catch (parseError) {
-      console.log(`[FirebaseUtils] Direct JSON parse failed, attempting recovery...`);
+    } catch (parseError: any) {
+      console.log(`[FirebaseUtils] Direct JSON parse failed (${parseError.message}), attempting recovery...`);
       
-      // Handle "null{...}" or other prefix garbage
-      const firstBrace = rawText.indexOf('{');
-      const firstBracket = rawText.indexOf('[');
-      const lastBrace = rawText.lastIndexOf('}');
-      const lastBracket = rawText.lastIndexOf(']');
+      // Handle "null{...}" or other prefix/suffix garbage by finding the core JSON part
+      // This regex looks for the first '{' or '[' and matches until the last '}' or ']'
+      const match = rawText.match(/(\[.*\]|\{.*\})/s);
       
-      const isArray = firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace);
-      const startIdx = isArray ? firstBracket : firstBrace;
-      const endIdx = isArray ? lastBracket : lastBrace;
-      
-      if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-        const jsonPart = rawText.substring(startIdx, endIdx + 1);
-        result = JSON.parse(jsonPart);
-        console.log(`[FirebaseUtils] Successfully recovered JSON from malformed response`);
+      if (match) {
+        try {
+          result = JSON.parse(match[0]);
+          console.log(`[FirebaseUtils] Successfully recovered JSON using regex extraction`);
+        } catch (secondError) {
+          // If regex-based extraction still fails, try one more time with manual slicing
+          // just in case the regex was too greedy with multiple objects
+          const firstBrace = rawText.indexOf('{');
+          const firstBracket = rawText.indexOf('[');
+          const lastBrace = rawText.lastIndexOf('}');
+          const lastBracket = rawText.lastIndexOf(']');
+
+          const isArray = firstBracket !== -1 && (firstBrace === -1 || (firstBracket < firstBrace && firstBracket !== -1));
+          const startIdx = isArray ? firstBracket : firstBrace;
+          const endIdx = isArray ? lastBracket : lastBrace;
+
+          if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+            try {
+              const jsonPart = rawText.substring(startIdx, endIdx + 1);
+              result = JSON.parse(jsonPart);
+              console.log(`[FirebaseUtils] Successfully recovered JSON using manual slicing`);
+            } catch (thirdError) {
+              throw parseError; // Re-throw original error if all recovery fails
+            }
+          } else {
+            throw parseError;
+          }
+        }
       } else {
         throw parseError;
       }

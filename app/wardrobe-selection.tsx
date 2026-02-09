@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,7 +14,7 @@ const CATEGORIES = ['All', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes', '
 
 export default function WardrobeSelectionScreen() {
   const { event } = useLocalSearchParams<{ event: string }>();
-  const { items: wardrobe } = useWardrobe(); // Correctly use 'wardrobe' from context
+  const { items } = useWardrobe();
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [filter, setFilter] = useState('All');
 
@@ -26,7 +26,7 @@ export default function WardrobeSelectionScreen() {
 
   const handleGenerate = () => {
     if (selectedItems.length === 0) {
-        alert('Please select at least one item.');
+        Alert.alert('Selection Required', 'Please select at least one item.');
         return;
     }
     router.push({
@@ -35,8 +35,8 @@ export default function WardrobeSelectionScreen() {
     });
   };
 
-  const filteredItems = (wardrobe || []).filter((item: ClothingItem) =>
-    filter === 'All' || item.category.toLowerCase() === filter.toLowerCase()
+  const filteredItems = (items || []).filter((item: ClothingItem) =>
+    filter === 'All' || (item.category && item.category.toLowerCase() === filter.toLowerCase())
   );
 
   return (

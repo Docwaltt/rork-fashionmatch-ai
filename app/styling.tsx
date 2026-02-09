@@ -28,7 +28,7 @@ interface OutfitSuggestion {
 
 export default function StylingScreen() {
   const router = useRouter();
-  const { items: wardrobe } = useWardrobe();
+  const { items } = useWardrobe();
   const { event, selectedItemId, selectedItemIds: selectedItemIdsJSON } = useLocalSearchParams<{
     event: string;
     selectedItemId?: string;
@@ -39,7 +39,7 @@ export default function StylingScreen() {
 
   const stylingWardrobe = useMemo(() => {
     // Guard clause: Wait until the wardrobe is loaded to prevent crashes.
-    if (!wardrobe) {
+    if (!items) {
       return [];
     }
 
@@ -48,19 +48,19 @@ export default function StylingScreen() {
     if (selectedItemIdsJSON) {
       try {
         const ids = JSON.parse(selectedItemIdsJSON);
-        itemsToStyle = wardrobe.filter((item: ClothingItem) => ids.includes(item.id));
+        itemsToStyle = items.filter((item: ClothingItem) => ids.includes(item.id));
       } catch (e) {
         console.error("Failed to parse selectedItemIds:", e);
         return [];
       }
     } else if (selectedItemId) {
-      const selectedItem = wardrobe.find((item: ClothingItem) => item.id === selectedItemId);
-      itemsToStyle = selectedItem ? [selectedItem, ...wardrobe.filter((item: ClothingItem) => item.id !== selectedItemId)] : [];
+      const selectedItem = items.find((item: ClothingItem) => item.id === selectedItemId);
+      itemsToStyle = selectedItem ? [selectedItem, ...items.filter((item: ClothingItem) => item.id !== selectedItemId)] : [];
     } else {
-        itemsToStyle = wardrobe;
+        itemsToStyle = items;
     }
     return itemsToStyle;
-  }, [wardrobe, selectedItemId, selectedItemIdsJSON]);
+  }, [items, selectedItemId, selectedItemIdsJSON]);
 
   const suggestOutfitMutation = trpc.wardrobe.suggestOutfit.useMutation({
     onSuccess: (data) => {
@@ -100,10 +100,10 @@ export default function StylingScreen() {
 
   const renderSuggestionCard = (suggestion: OutfitSuggestion, index: number) => {
     // Guard against wardrobe being unavailable during render
-    if (!wardrobe) return null;
+    if (!items) return null;
 
     const outfitItems = (suggestion.items || [])
-      .map(itemId => wardrobe.find((item: ClothingItem) => item.id === itemId))
+      .map(itemId => items.find((item: ClothingItem) => item.id === itemId))
       .filter((item): item is ClothingItem => !!item);
 
     return (
