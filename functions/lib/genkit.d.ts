@@ -2,7 +2,7 @@ import { z } from 'genkit';
 export declare const ClothingSchema: z.ZodObject<{
     id: z.ZodOptional<z.ZodString>;
     imageUri: z.ZodOptional<z.ZodString>;
-    category: z.ZodString;
+    category: z.ZodOptional<z.ZodString>;
     color: z.ZodOptional<z.ZodString>;
     style: z.ZodOptional<z.ZodString>;
     confidence: z.ZodOptional<z.ZodNumber>;
@@ -15,9 +15,9 @@ export declare const ClothingSchema: z.ZodObject<{
     hasPattern: z.ZodOptional<z.ZodBoolean>;
     patternDescription: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
-    category: string;
     id?: string | undefined;
     imageUri?: string | undefined;
+    category?: string | undefined;
     color?: string | undefined;
     style?: string | undefined;
     confidence?: number | undefined;
@@ -30,9 +30,9 @@ export declare const ClothingSchema: z.ZodObject<{
     hasPattern?: boolean | undefined;
     patternDescription?: string | undefined;
 }, {
-    category: string;
     id?: string | undefined;
     imageUri?: string | undefined;
+    category?: string | undefined;
     color?: string | undefined;
     style?: string | undefined;
     confidence?: number | undefined;
@@ -68,7 +68,7 @@ export declare const OutfitSuggestionSchema: z.ZodObject<{
 export declare const generateOutfitImage: import("@genkit-ai/core/lib/action-Dt9i8CGd").u<z.ZodArray<z.ZodObject<{
     id: z.ZodOptional<z.ZodString>;
     imageUri: z.ZodOptional<z.ZodString>;
-    category: z.ZodString;
+    category: z.ZodOptional<z.ZodString>;
     color: z.ZodOptional<z.ZodString>;
     style: z.ZodOptional<z.ZodString>;
     confidence: z.ZodOptional<z.ZodNumber>;
@@ -81,9 +81,9 @@ export declare const generateOutfitImage: import("@genkit-ai/core/lib/action-Dt9
     hasPattern: z.ZodOptional<z.ZodBoolean>;
     patternDescription: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
-    category: string;
     id?: string | undefined;
     imageUri?: string | undefined;
+    category?: string | undefined;
     color?: string | undefined;
     style?: string | undefined;
     confidence?: number | undefined;
@@ -96,9 +96,9 @@ export declare const generateOutfitImage: import("@genkit-ai/core/lib/action-Dt9
     hasPattern?: boolean | undefined;
     patternDescription?: string | undefined;
 }, {
-    category: string;
     id?: string | undefined;
     imageUri?: string | undefined;
+    category?: string | undefined;
     color?: string | undefined;
     style?: string | undefined;
     confidence?: number | undefined;
@@ -115,7 +115,7 @@ export declare const generateOutfits: import("@genkit-ai/core/lib/action-Dt9i8CG
     wardrobe: z.ZodArray<z.ZodObject<{
         id: z.ZodOptional<z.ZodString>;
         imageUri: z.ZodOptional<z.ZodString>;
-        category: z.ZodString;
+        category: z.ZodOptional<z.ZodString>;
         color: z.ZodOptional<z.ZodString>;
         style: z.ZodOptional<z.ZodString>;
         confidence: z.ZodOptional<z.ZodNumber>;
@@ -128,9 +128,9 @@ export declare const generateOutfits: import("@genkit-ai/core/lib/action-Dt9i8CG
         hasPattern: z.ZodOptional<z.ZodBoolean>;
         patternDescription: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        category: string;
         id?: string | undefined;
         imageUri?: string | undefined;
+        category?: string | undefined;
         color?: string | undefined;
         style?: string | undefined;
         confidence?: number | undefined;
@@ -143,9 +143,9 @@ export declare const generateOutfits: import("@genkit-ai/core/lib/action-Dt9i8CG
         hasPattern?: boolean | undefined;
         patternDescription?: string | undefined;
     }, {
-        category: string;
         id?: string | undefined;
         imageUri?: string | undefined;
+        category?: string | undefined;
         color?: string | undefined;
         style?: string | undefined;
         confidence?: number | undefined;
@@ -163,9 +163,9 @@ export declare const generateOutfits: import("@genkit-ai/core/lib/action-Dt9i8CG
     referenceItemId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     wardrobe: {
-        category: string;
         id?: string | undefined;
         imageUri?: string | undefined;
+        category?: string | undefined;
         color?: string | undefined;
         style?: string | undefined;
         confidence?: number | undefined;
@@ -183,9 +183,9 @@ export declare const generateOutfits: import("@genkit-ai/core/lib/action-Dt9i8CG
     referenceItemId?: string | undefined;
 }, {
     wardrobe: {
-        category: string;
         id?: string | undefined;
         imageUri?: string | undefined;
+        category?: string | undefined;
         color?: string | undefined;
         style?: string | undefined;
         confidence?: number | undefined;

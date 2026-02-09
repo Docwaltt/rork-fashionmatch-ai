@@ -10,7 +10,7 @@ const ClothingItemSchema = z.object({
   id: z.string(),
   userId: z.string().optional(),
   imageUri: z.string().optional(),
-  category: z.string(),
+  category: z.string().optional(),
   color: z.string().optional(),
   colors: z.array(z.string()).optional(),
   style: z.string().optional(),

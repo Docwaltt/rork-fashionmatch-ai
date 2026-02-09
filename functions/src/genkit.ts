@@ -17,7 +17,7 @@ if (!clipdropApiKey) {
 export const ClothingSchema = z.object({
   id: z.string().optional().describe('Unique ID for the clothing item'),
   imageUri: z.string().optional().describe('The original Base64 URI of the image.'),
-  category: z.string().describe('Type of item (e.g., Denim Jacket, T-Shirt, Jeans)'),
+  category: z.string().optional().describe('Type of item (e.g., Denim Jacket, T-Shirt, Jeans)'),
   color: z.string().optional().describe('Primary color detected'),
   style: z.string().optional().describe('Fashion style (e.g., Casual, Formal, Vintage, Streetwear)'),
   confidence: z.number().optional().describe('AI certainty score from 0 to 1'),
