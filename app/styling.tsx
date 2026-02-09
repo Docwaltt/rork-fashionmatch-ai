@@ -88,6 +88,7 @@ export default function StylingScreen() {
     suggestOutfitMutation.mutate({
       wardrobe: stylingWardrobe,
       numSuggestions: 2,
+      event: event || 'casual',
     });
   };
 

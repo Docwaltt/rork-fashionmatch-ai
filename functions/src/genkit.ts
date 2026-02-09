@@ -175,11 +175,12 @@ export const generateOutfits = ai.defineFlow(
     inputSchema: z.object({
       wardrobe: z.array(ClothingSchema),
       numSuggestions: z.number().optional().default(2),
+      event: z.string().optional(),
     }),
     outputSchema: z.array(OutfitSuggestionSchema),
   },
-  async ({ wardrobe, numSuggestions }) => {
-    console.log(`[generateOutfits] Starting flow for ${wardrobe.length} items. Requesting ${numSuggestions} suggestions.`);
+  async ({ wardrobe, numSuggestions, event }) => {
+    console.log(`[generateOutfits] Starting flow for ${wardrobe.length} items for event ${event || 'unspecified'}. Requesting ${numSuggestions} suggestions.`);
     if (wardrobe.length < 2) {
       console.log('[generateOutfits] Wardrobe has less than 2 items. Returning empty array.');
       return [];
@@ -191,7 +192,16 @@ export const generateOutfits = ai.defineFlow(
       return rest;
     });
 
-    const promptText = `Create ${numSuggestions} stylish and complete outfits from the provided wardrobe items. For each outfit, provide a title, a brief one-sentence description, a detailed reason explaining why the outfit is a good fashion match (considering color theory, style harmony, and occasion suitability), and the list of item IDs. Wardrobe: ${JSON.stringify(cleanWardrobe, null, 2)}`;
+    const promptText = `Create ${numSuggestions} stylish and complete outfits for a ${event || 'general'} occasion using the provided wardrobe items.
+    An outfit should ideally consist of a top and a bottom, or a dress and shoes, etc.
+    Be creative and try to suggest the best possible combinations for a ${event || 'general'} setting even if the wardrobe is limited.
+    For each outfit, provide:
+    1. A catchy title.
+    2. A brief one-sentence description.
+    3. A detailed reasoning (3-4 sentences) about color theory, style harmony, and suitability for the ${event || 'general'} occasion.
+    4. The list of exact item IDs used in the outfit.
+
+    Wardrobe items: ${JSON.stringify(cleanWardrobe, null, 2)}`;
     console.log('[generateOutfits] Prompt text created. Length:', promptText.length);
 
     try {
