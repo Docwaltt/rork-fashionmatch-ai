@@ -137,7 +137,12 @@ export async function callFirebaseFunction(functionName: string, data: any) {
     }
 
     // Ensure we return an object if possible to avoid 'spreading a string' issues in callers
-    return result !== null && result !== undefined ? result : {};
+    if (result === null || result === undefined) return {};
+    if (typeof result !== 'object') {
+        console.warn(`[FirebaseUtils] Function ${functionName} returned non-object:`, typeof result);
+        return { data: result }; // Wrap it to avoid spreading issues
+    }
+    return result;
   } catch (error: any) {
     console.error(`[FirebaseUtils] Error calling function ${functionName}:`, error.message);
     if (error.response) {
