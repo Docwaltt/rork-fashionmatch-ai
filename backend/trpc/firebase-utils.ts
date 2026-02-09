@@ -48,50 +48,56 @@ export async function callFirebaseFunction(functionName: string, data: any) {
 
     // Parse response - handle malformed JSON like "null{...}" or other junk
     let result: any;
-    const rawText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
     
-    console.log(`[FirebaseUtils] Raw response preview: ${rawText.substring(0, 200)}`);
-    
-    // Try to parse as-is first
-    try {
-      result = JSON.parse(rawText);
-    } catch (parseError: any) {
-      console.log(`[FirebaseUtils] Direct JSON parse failed (${parseError.message}), attempting recovery...`);
+    // If response.data is already an object, use it directly to avoid stringify/parse cycles
+    if (response.data && typeof response.data === 'object') {
+      console.log(`[FirebaseUtils] Function ${functionName} returned object directly`);
+      result = response.data;
+    } else {
+      const rawText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+      console.log(`[FirebaseUtils] Raw response length: ${rawText.length}. Preview: ${rawText.substring(0, 200)}`);
       
-      // Handle "null{...}" or other prefix/suffix garbage by finding the core JSON part
-      // This regex looks for the first '{' or '[' and matches until the last '}' or ']'
-      const match = rawText.match(/(\[.*\]|\{.*\})/s);
-      
-      if (match) {
-        try {
-          result = JSON.parse(match[0]);
-          console.log(`[FirebaseUtils] Successfully recovered JSON using regex extraction`);
-        } catch (secondError) {
-          // If regex-based extraction still fails, try one more time with manual slicing
-          // just in case the regex was too greedy with multiple objects
-          const firstBrace = rawText.indexOf('{');
-          const firstBracket = rawText.indexOf('[');
-          const lastBrace = rawText.lastIndexOf('}');
-          const lastBracket = rawText.lastIndexOf(']');
+      // Try to parse as-is first
+      try {
+        result = JSON.parse(rawText);
+      } catch (parseError: any) {
+        console.log(`[FirebaseUtils] Direct JSON parse failed (${parseError.message}), attempting recovery...`);
 
-          const isArray = firstBracket !== -1 && (firstBrace === -1 || (firstBracket < firstBrace && firstBracket !== -1));
-          const startIdx = isArray ? firstBracket : firstBrace;
-          const endIdx = isArray ? lastBracket : lastBrace;
+        // Handle "null{...}" or other prefix/suffix garbage by finding the core JSON part
+        // Using greedy match to ensure we capture full nested objects
+        const match = rawText.match(/(\[.*\]|\{.*\})/s);
 
-          if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-            try {
-              const jsonPart = rawText.substring(startIdx, endIdx + 1);
-              result = JSON.parse(jsonPart);
-              console.log(`[FirebaseUtils] Successfully recovered JSON using manual slicing`);
-            } catch (thirdError) {
-              throw parseError; // Re-throw original error if all recovery fails
+        if (match) {
+          try {
+            result = JSON.parse(match[0]);
+            console.log(`[FirebaseUtils] Successfully recovered JSON using regex extraction`);
+          } catch (secondError) {
+            // If regex-based extraction still fails, try one more time with manual slicing
+            // just in case the regex was still problematic
+            const firstBrace = rawText.indexOf('{');
+            const firstBracket = rawText.indexOf('[');
+            const lastBrace = rawText.lastIndexOf('}');
+            const lastBracket = rawText.lastIndexOf(']');
+
+            const isArray = firstBracket !== -1 && (firstBrace === -1 || (firstBracket < firstBrace && firstBracket !== -1));
+            const startIdx = isArray ? firstBracket : firstBrace;
+            const endIdx = isArray ? lastBracket : lastBrace;
+
+            if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+              try {
+                const jsonPart = rawText.substring(startIdx, endIdx + 1);
+                result = JSON.parse(jsonPart);
+                console.log(`[FirebaseUtils] Successfully recovered JSON using manual slicing`);
+              } catch (thirdError) {
+                throw parseError; // Re-throw original error if all recovery fails
+              }
+            } else {
+              throw parseError;
             }
-          } else {
-            throw parseError;
           }
+        } else {
+          throw parseError;
         }
-      } else {
-        throw parseError;
       }
     }
 

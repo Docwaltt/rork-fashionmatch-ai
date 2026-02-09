@@ -111,7 +111,9 @@ export const processClothing = ai.defineFlow(
         throw new Error("Empty AI response");
       }
       
-      return { ...result, imageUri, cleanedImage: cleanedImageBase64, isBackgroundRemoved };
+      // Optimized: Remove original imageUri from response to reduce payload size.
+      // The frontend already has this data.
+      return { ...result, cleanedImage: cleanedImageBase64, isBackgroundRemoved };
 
     } catch (geminiError: any) {
       console.error("LOG: Gemini analysis failed:", geminiError.message, geminiError.stack);
