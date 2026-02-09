@@ -84,10 +84,10 @@ export const processClothing = ai.defineFlow(
     }
 
     try {
-      console.log(`LOG: Sending to Gemini with model gemini-2.0-flash...`);
+      console.log(`LOG: Sending to Gemini with model gemini-3-pro-image-preview...`);
       
       const response = await ai.generate({
-        model: googleAI.model('gemini-2.0-flash'),
+        model: googleAI.model('gemini-3-pro-image-preview'),
         prompt: [
           { text: "Analyze the clothing item in the image. Extract category, color, style, fabric, texture, silhouette, and material type." },
           { media: { url: imageForGemini } },
@@ -189,7 +189,7 @@ export const generateOutfits = ai.defineFlow(
 
     try {
         const response = await ai.generate({
-          model: googleAI.model('gemini-2.0-flash'),
+          model: googleAI.model('gemini-3-pro-preview'),
           prompt: [
             {
               text: promptText
