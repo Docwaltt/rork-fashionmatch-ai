@@ -62,6 +62,8 @@ export async function callFirebaseFunction(functionName: string, data: any) {
         result = JSON.parse(rawText);
       } catch (parseError: any) {
         console.log(`[FirebaseUtils] Direct JSON parse failed (${parseError.message}), attempting recovery...`);
+        console.log(`[FirebaseUtils] Raw response start: ${rawText.substring(0, 50)}`);
+        console.log(`[FirebaseUtils] Raw response end: ${rawText.substring(rawText.length - 50)}`);
 
         // Handle "null{...}" or other prefix/suffix garbage by finding the core JSON part
         // Using greedy match to ensure we capture full nested objects

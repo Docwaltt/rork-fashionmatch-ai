@@ -32,7 +32,7 @@ const compressAndConvertToBase64 = async (uri: string): Promise<string> => {
   try {
     const manipulated = await ImageManipulator.manipulateAsync(
       uri,
-      [{ resize: { width: 800 } }],
+      [{ resize: { width: 512 } }],
       { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
     );
     return `data:image/jpeg;base64,${manipulated.base64}`;

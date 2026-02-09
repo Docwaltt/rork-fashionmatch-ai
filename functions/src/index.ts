@@ -2,7 +2,11 @@ import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import type { Request } from 'firebase-functions/v2/https';
 import type { Response } from 'express';
+import { initializeApp } from 'firebase-admin/app';
 import { processClothing, generateOutfits } from './genkit.js';
+
+// Initialize Firebase Admin
+initializeApp();
 
 // Define Secrets
 const googleGenAiApiKey = defineSecret('GOOGLE_GENAI_API_KEY');
