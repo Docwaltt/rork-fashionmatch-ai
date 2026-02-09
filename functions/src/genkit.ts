@@ -1,6 +1,8 @@
 
 import { genkit, z } from 'genkit';
 import { googleAI } from '@genkit-ai/google-genai';
+import { getStorage } from 'firebase-admin/storage';
+import { randomUUID } from 'crypto';
 
 // Last-step verification of API keys
 const apiKey = process.env.GOOGLE_GENAI_API_KEY || process.env.GOOGLE_API_KEY;
@@ -35,7 +37,7 @@ const ai = genkit({
   plugins: [googleAI()],
 });
 
-async function removeBackgroundWithClipdrop(imageBuffer: Buffer): Promise<string> {
+async function removeBackgroundWithClipdrop(imageBuffer: Buffer): Promise<Buffer> {
   if (!clipdropApiKey) throw new Error("CLIPDROP_API_KEY is not set.");
   
   const formData = new FormData();
@@ -59,7 +61,21 @@ async function removeBackgroundWithClipdrop(imageBuffer: Buffer): Promise<string
   }
   
   const arrayBuffer = await response.arrayBuffer();
-  return `data:image/png;base64,${Buffer.from(arrayBuffer).toString('base64')}`;
+  return Buffer.from(arrayBuffer);
+}
+
+async function uploadToStorage(buffer: Buffer, contentType: string): Promise<string> {
+    const bucket = getStorage().bucket();
+    const fileName = `temp_cleaned/${randomUUID()}.png`;
+    const file = bucket.file(fileName);
+
+    await file.save(buffer, {
+        metadata: { contentType },
+        public: true, // Make it publicly accessible for simplicity in this flow
+    });
+
+    // Construct the public URL (standard Firebase Storage public URL format)
+    return `https://storage.googleapis.com/${bucket.name}/${fileName}`;
 }
 
 export const processClothing = ai.defineFlow(
@@ -75,15 +91,26 @@ export const processClothing = ai.defineFlow(
        return { error: "No image data provided" };
     }
 
-    let cleanedImageBase64: string | undefined;
+    let cleanedImageUrl: string | undefined;
     let isBackgroundRemoved = false;
     let imageForGemini = imageUri;
 
     try {
-      let inputBuffer = Buffer.from(imageUri.replace(/^data:image\/\w+;base64,/, ''), 'base64');
-      cleanedImageBase64 = await removeBackgroundWithClipdrop(inputBuffer);
+      // Improved base64 extraction
+      const base64Part = imageUri.includes(',') ? imageUri.split(',')[1] : imageUri;
+      const cleanBase64 = base64Part.replace(/\s/g, '');
+      let inputBuffer = Buffer.from(cleanBase64, 'base64');
+
+      const cleanedBuffer = await removeBackgroundWithClipdrop(inputBuffer);
       isBackgroundRemoved = true;
-      imageForGemini = cleanedImageBase64;
+
+      // Upload to storage to keep response size small
+      cleanedImageUrl = await uploadToStorage(cleanedBuffer, 'image/png');
+
+      // We still need a data URI for Gemini if we want to send it inline
+      // but we can also send the URL if Gemini supports it from GCS.
+      // However, it's easier to send the data URI to Gemini but only the URL to the frontend.
+      imageForGemini = `data:image/png;base64,${cleanedBuffer.toString('base64')}`;
     } catch (error: any) {
       console.error("LOG: Background removal failed. Using original image. Error:", error.message);
       imageForGemini = imageUri; 
@@ -111,13 +138,12 @@ export const processClothing = ai.defineFlow(
         throw new Error("Empty AI response");
       }
       
-      // Optimized: Remove original imageUri from response to reduce payload size.
-      // The frontend already has this data.
-      return { ...result, cleanedImage: cleanedImageBase64, isBackgroundRemoved };
+      // Optimized: Use Storage URL instead of massive Base64 string.
+      return { ...result, cleanedImage: cleanedImageUrl, isBackgroundRemoved };
 
     } catch (geminiError: any) {
       console.error("LOG: Gemini analysis failed:", geminiError.message, geminiError.stack);
-      return { error: `AI Analysis Failed: ${geminiError.message}`, isBackgroundRemoved, cleanedImage: cleanedImageBase64 };
+      return { error: `AI Analysis Failed: ${geminiError.message}`, isBackgroundRemoved, cleanedImage: cleanedImageUrl };
     }
   }
 );

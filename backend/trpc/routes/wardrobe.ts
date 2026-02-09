@@ -61,8 +61,14 @@ export const wardrobeRouter = createTRPCRouter({
                                 data.segmentationImage ||
                                 data.cleanedImageUrl;
 
+        // Clean data for the frontend
+        const { cleanedImage, ...rest } = data || {};
+
         return {
-          ...(data || {}),
+          ...rest,
+          // Re-include cleanedImage but set it to the URL to save space
+          // while maintaining compatibility with ClothingItem type
+          cleanedImage: cleanedImageUrl,
           cleanedImageUrl: cleanedImageUrl,
         };
       } catch (error: any) {
