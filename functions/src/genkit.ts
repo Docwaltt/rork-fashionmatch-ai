@@ -65,16 +65,30 @@ async function removeBackgroundWithClipdrop(imageBuffer: Buffer): Promise<Buffer
 }
 
 async function uploadToStorage(buffer: Buffer, contentType: string): Promise<string> {
-    const bucket = getStorage().bucket();
+    let bucket = getStorage().bucket();
+    if (!bucket.name) {
+        console.warn("LOG: Default bucket name is empty. Fallback to project-based bucket.");
+        const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID;
+        if (projectId) {
+            bucket = getStorage().bucket(`${projectId}.appspot.com`);
+        } else {
+            console.error("LOG: Project ID not found in environment.");
+        }
+    }
+
+    if (!bucket.name) {
+        throw new Error("Could not determine storage bucket name. Ensure GOOGLE_CLOUD_PROJECT or EXPO_PUBLIC_FIREBASE_PROJECT_ID is set.");
+    }
+
+    console.log(`LOG: Uploading to bucket: ${bucket.name}`);
     const fileName = `temp_cleaned/${randomUUID()}.png`;
     const file = bucket.file(fileName);
 
     await file.save(buffer, {
         metadata: { contentType },
-        public: true, // Make it publicly accessible for simplicity in this flow
+        public: true,
     });
 
-    // Construct the public URL (standard Firebase Storage public URL format)
     return `https://storage.googleapis.com/${bucket.name}/${fileName}`;
 }
 
@@ -100,6 +114,9 @@ export const processClothing = ai.defineFlow(
       const base64Part = imageUri.includes(',') ? imageUri.split(',')[1] : imageUri;
       const cleanBase64 = base64Part.replace(/\s/g, '');
       let inputBuffer = Buffer.from(cleanBase64, 'base64');
+
+      console.log(`LOG: Input buffer length: ${inputBuffer.length}`);
+      if (inputBuffer.length === 0) throw new Error("Input image buffer is empty");
 
       const cleanedBuffer = await removeBackgroundWithClipdrop(inputBuffer);
       isBackgroundRemoved = true;
@@ -138,8 +155,17 @@ export const processClothing = ai.defineFlow(
         throw new Error("Empty AI response");
       }
       
+      console.log(`LOG: Gemini output: ${JSON.stringify(result).substring(0, 500)}`);
+
       // Optimized: Use Storage URL instead of massive Base64 string.
-      return { ...result, cleanedImage: cleanedImageUrl, isBackgroundRemoved };
+      const finalResponse = {
+          ...result,
+          cleanedImage: cleanedImageUrl,
+          cleanedImageUrl: cleanedImageUrl,
+          isBackgroundRemoved
+      };
+      console.log(`LOG: Returning final response keys: ${Object.keys(finalResponse)}`);
+      return finalResponse;
 
     } catch (geminiError: any) {
       console.error("LOG: Gemini analysis failed:", geminiError.message, geminiError.stack);
