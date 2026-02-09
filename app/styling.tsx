@@ -22,6 +22,7 @@ import { ClothingItem } from "@/types/wardrobe";
 interface OutfitSuggestion {
   title: string;
   description: string;
+  reason: string;
   items: string[];
   generatedImageUrl?: string;
 }
@@ -77,18 +78,25 @@ export default function StylingScreen() {
   });
 
   const handleGenerate = () => {
-    if (stylingWardrobe.length < 2) {
+    if (stylingWardrobe.length < 1) {
       Alert.alert(
-        "Not Enough Clothing",
-        "You need at least two items to generate an outfit. Please select more items from your wardrobe."
+        "Empty Wardrobe",
+        "You don't have any clothing items to style. Please add some items to your wardrobe first."
       );
       return;
     }
 
+    // Optimize payload by stripping large image data before sending to backend
+    const optimizedWardrobe = stylingWardrobe.map(item => {
+      const { imageUri, cleanedImage, thumbnailUri, ...rest } = item;
+      return rest;
+    });
+
     suggestOutfitMutation.mutate({
-      wardrobe: stylingWardrobe,
+      wardrobe: optimizedWardrobe as any,
       numSuggestions: 2,
       event: event || 'casual',
+      referenceItemId: selectedItemId,
     });
   };
 
@@ -111,6 +119,13 @@ export default function StylingScreen() {
       <View key={index} style={styles.suggestionCard}>
         <Text style={styles.suggestionTitle}>{suggestion.title}</Text>
         <Text style={styles.suggestionDescription}>{suggestion.description}</Text>
+
+        {suggestion.reason && (
+          <View style={styles.reasonContainer}>
+            <Text style={styles.reasonLabel}>WHY THIS WORKS:</Text>
+            <Text style={styles.reasonText}>{suggestion.reason}</Text>
+          </View>
+        )}
 
         {suggestion.generatedImageUrl ? (
           <Image
@@ -279,6 +294,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 16,
     lineHeight: 20,
+    fontStyle: 'italic',
+  },
+  reasonContainer: {
+    backgroundColor: 'rgba(212, 175, 55, 0.05)',
+    padding: 12,
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.gold[400],
+    marginBottom: 20,
+  },
+  reasonLabel: {
+    color: Colors.gold[400],
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  reasonText: {
+    color: Colors.white,
+    fontSize: 13,
+    lineHeight: 18,
+    opacity: 0.9,
   },
   itemImageGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   itemImage: { width: 80, height: 80 },

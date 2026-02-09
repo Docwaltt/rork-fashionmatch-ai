@@ -84,15 +84,17 @@ export const wardrobeRouter = createTRPCRouter({
         wardrobe: z.array(ClothingItemSchema),
         numSuggestions: z.number().min(1).max(5).default(2),
         event: z.string().optional(),
+        referenceItemId: z.string().optional(),
       })
     )
     .mutation(async ({ input }) => {
-      console.log(`[Wardrobe] Suggesting outfits from ${input.wardrobe.length} items for event: ${input.event || 'unspecified'}`);
+      console.log(`[Wardrobe] Suggesting outfits from ${input.wardrobe.length} items for event: ${input.event || 'unspecified'}. Reference: ${input.referenceItemId || 'none'}`);
       try {
         const result = await callFirebaseFunction('generateOutfitsFn', {
           wardrobe: input.wardrobe,
           numSuggestions: input.numSuggestions,
           event: input.event,
+          referenceItemId: input.referenceItemId,
         });
 
         console.log("[Wardrobe] suggestOutfit result received");

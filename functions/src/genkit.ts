@@ -18,11 +18,11 @@ export const ClothingSchema = z.object({
   id: z.string().optional().describe('Unique ID for the clothing item'),
   imageUri: z.string().optional().describe('The original Base64 URI of the image.'),
   category: z.string().describe('Type of item (e.g., Denim Jacket, T-Shirt, Jeans)'),
-  color: z.string().describe('Primary color detected'),
-  style: z.string().describe('Fashion style (e.g., Casual, Formal, Vintage, Streetwear)'),
-  confidence: z.number().describe('AI certainty score from 0 to 1'),
+  color: z.string().optional().describe('Primary color detected'),
+  style: z.string().optional().describe('Fashion style (e.g., Casual, Formal, Vintage, Streetwear)'),
+  confidence: z.number().optional().describe('AI certainty score from 0 to 1'),
   cleanedImage: z.string().optional().describe('Base64 string of the image with background removed'),
-  isBackgroundRemoved: z.boolean().describe('Whether the background removal process was successful'),
+  isBackgroundRemoved: z.boolean().optional().describe('Whether the background removal process was successful'),
   fabric: z.string().optional().describe('Fabric texture (e.g., knit, denim, silk, cotton, leather)'),
   texture: z.string().optional().describe('Visual texture of the fabric (e.g., smooth, ribbed, fuzzy, bumpy)'),
   silhouette: z.string().optional().describe('Item silhouette (e.g., oversized, tailored, A-line, slim)'),
@@ -176,13 +176,17 @@ export const generateOutfits = ai.defineFlow(
       wardrobe: z.array(ClothingSchema),
       numSuggestions: z.number().optional().default(2),
       event: z.string().optional(),
+      referenceItemId: z.string().optional(),
     }),
     outputSchema: z.array(OutfitSuggestionSchema),
   },
-  async ({ wardrobe, numSuggestions, event }) => {
-    console.log(`[generateOutfits] Starting flow for ${wardrobe.length} items for event ${event || 'unspecified'}. Requesting ${numSuggestions} suggestions.`);
-    if (wardrobe.length < 2) {
-      console.log('[generateOutfits] Wardrobe has less than 2 items. Returning empty array.');
+  async ({ wardrobe, numSuggestions, event, referenceItemId }) => {
+    console.log(`[generateOutfits] Starting flow for ${wardrobe.length} items for event ${event || 'unspecified'}. Reference Item: ${referenceItemId || 'none'}. Requesting ${numSuggestions} suggestions.`);
+
+    // We need at least 1 item to try and suggest something,
+    // but typically outfits need 2+ items.
+    if (wardrobe.length < 1) {
+      console.log('[generateOutfits] Wardrobe is empty. Returning empty array.');
       return [];
     }
 
@@ -192,10 +196,15 @@ export const generateOutfits = ai.defineFlow(
       return rest;
     });
 
-    const promptText = `Create ${numSuggestions} stylish and complete outfits for a ${event || 'general'} occasion using the provided wardrobe items.
+    let promptText = `Create up to ${numSuggestions} stylish and complete outfits for a ${event || 'general'} occasion using the provided wardrobe items.
     An outfit should ideally consist of a top and a bottom, or a dress and shoes, etc.
-    Be creative and try to suggest the best possible combinations for a ${event || 'general'} setting even if the wardrobe is limited.
-    For each outfit, provide:
+    Be creative and try to suggest the best possible combinations for a ${event || 'general'} setting even if the wardrobe is limited.`;
+
+    if (referenceItemId) {
+      promptText += `\n\nIMPORTANT: Every suggested outfit MUST include the item with ID "${referenceItemId}". Match other clothes from the wardrobe with this specific piece.`;
+    }
+
+    promptText += `\n\nFor each outfit, provide:
     1. A catchy title.
     2. A brief one-sentence description.
     3. A detailed reasoning (3-4 sentences) about color theory, style harmony, and suitability for the ${event || 'general'} occasion.

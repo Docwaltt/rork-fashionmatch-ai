@@ -35,9 +35,23 @@ export default function WardrobeSelectionScreen() {
     });
   };
 
-  const filteredItems = (items || []).filter((item: ClothingItem) =>
-    filter === 'All' || (item.category && item.category.toLowerCase() === filter.toLowerCase())
-  );
+  const filteredItems = (items || []).filter((item: ClothingItem) => {
+    if (filter === 'All') return true;
+    if (!item.category) return false;
+
+    const cat = item.category.toLowerCase();
+    const f = filter.toLowerCase();
+
+    // Handle plural to singular matching (e.g., 'Tops' -> 'top')
+    if (f === 'tops') return cat === 'top' || cat === 'shirt' || cat === 't-shirt' || cat === 'blouse' || cat === 'polo';
+    if (f === 'bottoms') return cat === 'bottom' || cat === 'trousers' || cat === 'jeans' || cat === 'shorts' || cat === 'skirt';
+    if (f === 'dresses') return cat === 'dress' || cat === 'gown' || cat === 'jumpsuit';
+    if (f === 'outerwear') return cat === 'outerwear' || cat === 'jacket' || cat === 'coat' || cat === 'blazer' || cat === 'sweater' || cat === 'hoodie' || cat === 'cardigan';
+    if (f === 'shoes') return cat === 'shoes' || cat === 'sneakers' || cat === 'boots' || cat === 'heels' || cat === 'flats' || cat === 'sandals';
+    if (f === 'accessories') return cat === 'accessories' || cat === 'bag' || cat === 'jewelry' || cat === 'watch' || cat === 'belt' || cat === 'tie';
+
+    return cat === f;
+  });
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
