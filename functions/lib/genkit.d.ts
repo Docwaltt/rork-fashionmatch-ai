@@ -159,6 +159,7 @@ export declare const generateOutfits: import("@genkit-ai/core/lib/action-Dt9i8CG
         patternDescription?: string | undefined;
     }>, "many">;
     numSuggestions: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
+    event: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     wardrobe: {
         category: string;
@@ -177,6 +178,7 @@ export declare const generateOutfits: import("@genkit-ai/core/lib/action-Dt9i8CG
         patternDescription?: string | undefined;
     }[];
     numSuggestions: number;
+    event?: string | undefined;
 }, {
     wardrobe: {
         category: string;
@@ -195,6 +197,7 @@ export declare const generateOutfits: import("@genkit-ai/core/lib/action-Dt9i8CG
         patternDescription?: string | undefined;
     }[];
     numSuggestions?: number | undefined;
+    event?: string | undefined;
 }>, z.ZodArray<z.ZodObject<{
     title: z.ZodString;
     description: z.ZodString;

@@ -62,8 +62,8 @@ export const wardrobeRouter = createTRPCRouter({
                                 data.segmentationImage ||
                                 data.cleanedImageUrl;
 
-        // Clean data for the frontend
-        const { cleanedImage, ...rest } = data || {};
+        // Clean data for the frontend - remove large base64 strings
+        const { cleanedImage, imageUri, ...rest } = data || {};
 
         return {
           ...rest,

@@ -157,6 +157,12 @@ export const processClothing = ai.defineFlow(
       
       console.log(`LOG: Gemini output: ${JSON.stringify(result).substring(0, 500)}`);
 
+      // Ensure we don't return massive base64 strings that cause truncation and "expected pattern" errors
+      if (result) {
+        delete (result as any).imageUri;
+        delete (result as any).cleanedImage;
+      }
+
       // Optimized: Use Storage URL instead of massive Base64 string.
       const finalResponse = {
           ...result,
