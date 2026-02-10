@@ -38,17 +38,22 @@ export const wardrobeRouter = router({
         }
 
         // To prevent truncated responses in the mobile frontend, ensure we don't return massive base64 strings
-        // The Cloud Function already returns a signed URL in 'cleanedImageUrl'
+        // The Cloud Function already returns a permanent Download URL in 'cleanedImageUrl'
         const result = { ...analysisResult };
         delete result.imageUri;
         
         // If cleanedImageUrl is missing but cleanedImage exists and is a URL, use it
-        if (!result.cleanedImageUrl && result.cleanedImage && result.cleanedImage.startsWith('http')) {
+        if (!result.cleanedImageUrl && result.cleanedImage && String(result.cleanedImage).startsWith('http')) {
             result.cleanedImageUrl = result.cleanedImage;
         }
 
-        // Now safe to remove the potentially large base64 'cleanedImage' field if it's not needed
-        if (result.cleanedImage && result.cleanedImage.length > 1000) {
+        // If cleanedImage is a base64 string without a prefix, add it for safety
+        if (result.cleanedImage && !String(result.cleanedImage).startsWith('http') && !String(result.cleanedImage).startsWith('data:')) {
+            result.cleanedImage = `data:image/png;base64,${result.cleanedImage}`;
+        }
+
+        // Now safe to remove the potentially large base64 'cleanedImage' field if it's redundant
+        if (result.cleanedImageUrl && result.cleanedImage && String(result.cleanedImage).length > 1000) {
             delete result.cleanedImage;
         }
 
