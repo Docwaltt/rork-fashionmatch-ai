@@ -76,7 +76,8 @@ export const generateOutfitsFn = onRequest({
 
 // 2. HTTP Function (for usage via tRPC backend or raw HTTP fetch)
 export const processClothingFn = onRequest({
-  memory: '4GiB',
+  memory: '2GiB',
+  minInstances: 0,
   timeoutSeconds: 300,
   region: 'us-central1',
   cors: true,
