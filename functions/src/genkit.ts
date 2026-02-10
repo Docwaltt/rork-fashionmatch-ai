@@ -86,10 +86,15 @@ async function uploadToStorage(buffer: Buffer, contentType: string): Promise<str
 
     await file.save(buffer, {
         metadata: { contentType },
-        public: true,
     });
 
-    return `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+    // Return long-lived signed URL to avoid public access issues and maintain security
+    const [signedUrl] = await file.getSignedUrl({
+      action: 'read',
+      expires: '03-01-2075', // Far future
+    });
+
+    return signedUrl;
 }
 
 export const processClothing = ai.defineFlow(

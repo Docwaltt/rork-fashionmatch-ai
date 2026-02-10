@@ -1,13 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { run } from "@genkit-ai/core";
-import {
-  ClothingSchema,
-  OutfitSuggestionSchema,
-  processImage,
-  generateOutfits,
-} from "../../../functions/src/genkit";
-import { getFirebaseApp } from "../firebase-utils";
+import { getFirebaseApp, callFirebaseFunction } from "../firebase-utils";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { authedProcedure, publicProcedure, router } from "../trpc";
 
@@ -25,56 +18,85 @@ export const wardrobeRouter = router({
     return wardrobeData.items;
   }),
 
+  analyze: authedProcedure
+    .input(z.object({ imageUrl: z.string(), gender: z.string().optional() }))
+    .mutation(async ({ input }) => {
+      try {
+        console.log("[Wardrobe] Calling analyzeImage function via FirebaseUtils");
+        // Use callFirebaseFunction which handles auth and connects to the correct Cloud Run instance
+        const analysisResult = await callFirebaseFunction('analyzeImage', {
+          image: input.imageUrl,
+          gender: input.gender,
+          background: 'remove'
+        });
+
+        if (!analysisResult || analysisResult.error) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: analysisResult?.error || "Image analysis failed to return a result.",
+          });
+        }
+
+        // To prevent truncated responses in the mobile frontend, ensure we don't return massive base64 strings
+        // The Cloud Function already returns a signed URL in 'cleanedImageUrl'
+        const result = { ...analysisResult };
+        delete result.imageUri;
+        
+        // If cleanedImageUrl is missing but cleanedImage exists and is a URL, use it
+        if (!result.cleanedImageUrl && result.cleanedImage && result.cleanedImage.startsWith('http')) {
+            result.cleanedImageUrl = result.cleanedImage;
+        }
+
+        // Now safe to remove the potentially large base64 'cleanedImage' field if it's not needed
+        if (result.cleanedImage && result.cleanedImage.length > 1000) {
+            delete result.cleanedImage;
+        }
+
+        return result;
+      } catch (error: any) {
+        console.error("[Wardrobe] Analyze mutation failed:", error.message);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `An error occurred during image analysis: ${error.message}`,
+        });
+      }
+    }),
+
   addItem: authedProcedure
-    .input(z.object({ imageUri: z.string() }))
+    .input(z.any()) // Using any to be flexible with the ClothingItem structure from the UI
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.uid;
 
       try {
-        const analysisResult = await run("processImage", () =>
-          processImage(input.imageUri)
-        );
+        let finalImageUri = input.imageUri;
 
-        if (!analysisResult) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Image analysis failed to return a result.",
-          });
+        // Fix corruption bug: Only prepend data URI prefix if it's base64 and missing it.
+        // If it's already a URL (starts with http), do NOT prepend anything.
+        if (finalImageUri && !finalImageUri.startsWith('http') && !finalImageUri.startsWith('data:')) {
+            finalImageUri = `data:image/png;base64,${finalImageUri}`;
         }
 
-        const data = ClothingSchema.parse(analysisResult);
-
-        const cleanedImageBase64 =
-          data.cleanedImage ||
-          (analysisResult as any).processedImage ||
-          (analysisResult as any).backgroundRemovedImage ||
-          (analysisResult as any).segmentationImage ||
-          (analysisResult as any).cleanedImageUrl;
-        
-        // Create a new object for Firestore, excluding the 'cleanedImage' property
-        const { cleanedImage, ...firestoreData } = data;
-
-        if (cleanedImageBase64) {
-            // Overwrite the imageUri with the cleaned base64 data URI
-            firestoreData.imageUri = cleanedImageBase64.startsWith("data:")
-            ? cleanedImageBase64
-            : `data:image/png;base64,${cleanedImageBase64}`;
-        }
+        const itemWithUser = {
+          ...input,
+          imageUri: finalImageUri,
+          userId,
+          addedAt: input.addedAt || Date.now(),
+        };
 
         const wardrobeDocRef = wardrobeCollection.doc(userId);
         await wardrobeDocRef.set(
           {
-            items: FieldValue.arrayUnion(firestoreData),
+            items: FieldValue.arrayUnion(itemWithUser),
           },
           { merge: true }
         );
 
-        return firestoreData;
+        return itemWithUser;
       } catch (error: any) {
-        console.error("[Wardrobe] Analysis mutation failed:", error.message);
+        console.error("[Wardrobe] AddItem mutation failed:", error.message);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `An error occurred during image analysis: ${error.message}`,
+          message: `Failed to save item: ${error.message}`,
         });
       }
     }),
@@ -88,7 +110,6 @@ export const wardrobeRouter = router({
     .mutation(async ({ ctx, input }) => {
       try {
         const userId = ctx.user.uid;
-
         const wardrobeSnapshot = await wardrobeCollection.doc(userId).get();
         const wardrobeData = wardrobeSnapshot.data();
 
@@ -100,20 +121,51 @@ export const wardrobeRouter = router({
           };
         }
 
-        const result = await run("generateOutfits", () =>
-          generateOutfits(wardrobeData.items, input.prompt)
-        );
+        // Strip images from wardrobe before sending to AI to keep prompt size manageable
+        const cleanItems = (wardrobeData.items || []).map((item: any) => {
+            const { imageUri, cleanedImage, cleanedImageUrl, ...rest } = item;
+            return rest;
+        });
+
+        const result = await callFirebaseFunction('generateOutfitsFn', {
+          wardrobe: cleanItems,
+          event: input.prompt
+        });
 
         return result;
       } catch (error: any) {
-        console.error(
-          "[Wardrobe] Outfit generation failed:",
-          error.message,
-          error.stack
-        );
+        console.error("[Wardrobe] Outfit generation failed:", error.message);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: `An error occurred during outfit generation: ${error.message}`,
+        });
+      }
+    }),
+
+  suggestOutfit: authedProcedure
+    .input(z.object({
+        wardrobe: z.array(z.any()),
+        event: z.string(),
+        numSuggestions: z.number().optional()
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        // Strip images from input wardrobe to keep request size manageable
+        const cleanWardrobe = (input.wardrobe || []).map((item: any) => {
+          const { imageUri, cleanedImage, cleanedImageUrl, ...rest } = item;
+          return rest;
+        });
+
+        const result = await callFirebaseFunction('generateOutfitsFn', {
+          ...input,
+          wardrobe: cleanWardrobe
+        });
+        return result;
+      } catch (error: any) {
+        console.error("[Wardrobe] Suggest outfit failed:", error.message);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: error.message,
         });
       }
     }),
