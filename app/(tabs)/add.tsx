@@ -96,7 +96,8 @@ export default function AddItemScreen() {
       setAnalysisSuccess(true);
       
       // Update UI with all details from the backend
-      setProcessedImage(data.cleanedImageUrl || null);
+      // Fallback to cleanedImage or capturedImage if cleanedImageUrl is missing
+      setProcessedImage(data.cleanedImageUrl || data.cleanedImage || capturedImage);
       setDetectedColors(data.color ? [data.color] : []);
       setMaterial(String(data.material || ''));
       setFabric(String(data.fabric || ''));

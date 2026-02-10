@@ -61,20 +61,30 @@ export const [WardrobeProvider, useWardrobe] = createContextHook(() => {
       if (!currentUserId) throw new Error("No authenticated user");
       
       let imageUrl = item.imageUri;
-      
+      if (!imageUrl) throw new Error("Item image is missing");
+
       // Upload image if it's not already a remote URL
       // Base64 starts with 'data:', local file starts with 'file:'
-      const isRemote = imageUrl.startsWith('http');
+      const isRemote = typeof imageUrl === 'string' && imageUrl.startsWith('http');
       
       if (!isRemote) {
           try {
               console.log('[WardrobeContext] Uploading image before saving...');
+
+              // Defensive prefixing for base64 strings if upload fails or is skipped
+              let uploadUri = item.imageUri;
+              if (typeof uploadUri === 'string' && !uploadUri.startsWith('http') && !uploadUri.startsWith('data:') && !uploadUri.startsWith('file:')) {
+                  uploadUri = `data:image/jpeg;base64,${uploadUri}`;
+              }
+
               // Use the item.id for the image path to match the document ID
-              imageUrl = await uploadImage(item.imageUri, item.id);
+              imageUrl = await uploadImage(uploadUri, item.id);
           } catch (e) {
               console.error("Failed to upload image, saving with original URI", e);
-              // If upload fails, we proceed with original URI (fallback), 
-              // but we might want to throw if strict consistency is required.
+              // If upload fails, ensure base64 has prefix before saving to Firestore
+              if (imageUrl && !imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
+                  imageUrl = `data:image/jpeg;base64,${imageUrl}`;
+              }
           }
       }
 
