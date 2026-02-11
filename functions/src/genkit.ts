@@ -4,17 +4,8 @@ import { googleAI } from '@genkit-ai/google-genai';
 import { getStorage } from 'firebase-admin/storage';
 import { randomUUID } from 'crypto';
 
-// Last-step verification of API keys
-const apiKey = process.env.GOOGLE_GENAI_API_KEY || process.env.GOOGLE_API_KEY;
-if (!apiKey) {
-  console.warn("CRITICAL: GOOGLE_GENAI_API_KEY is not set.");
-} else {
-  console.log("GOOGLE_GENAI_API_KEY is configured.");
-}
+// This is checked at runtime within the function, not at deployment time.
 const clipdropApiKey = process.env.CLIPDROP_API_KEY;
-if (!clipdropApiKey) {
-    console.warn("WARNING: CLIPDROP_API_KEY is not set. Background removal will be skipped.");
-}
 
 export const ClothingSchema = z.object({
   id: z.string().optional().describe('Unique ID for the clothing item'),
@@ -38,7 +29,10 @@ const ai = genkit({
 });
 
 async function removeBackgroundWithClipdrop(imageBuffer: Buffer): Promise<Buffer> {
-  if (!clipdropApiKey) throw new Error("CLIPDROP_API_KEY is not set.");
+  if (!clipdropApiKey) {
+    console.warn("WARNING: CLIPDROP_API_KEY is not set. Background removal will be skipped.");
+    throw new Error("CLIPDROP_API_KEY is not set.");
+  }
   
   const formData = new FormData();
   formData.append('image_file', new Blob([new Uint8Array(imageBuffer)], { type: 'image/jpeg' }), 'image.jpg');
@@ -110,23 +104,17 @@ export const processClothing = ai.defineFlow(
     let imageForGemini = imageUri;
 
     try {
-      // Improved base64 extraction
       const base64Part = imageUri.includes(',') ? imageUri.split(',')[1] : imageUri;
       const cleanBase64 = base64Part.replace(/\s/g, '');
       let inputBuffer = Buffer.from(cleanBase64, 'base64');
 
-      console.log(`LOG: Input buffer length: ${inputBuffer.length}`);
       if (inputBuffer.length === 0) throw new Error("Input image buffer is empty");
 
       const cleanedBuffer = await removeBackgroundWithClipdrop(inputBuffer);
       isBackgroundRemoved = true;
 
-      // Upload to storage to keep response size small
       cleanedImageUrl = await uploadToStorage(cleanedBuffer, 'image/png');
 
-      // We still need a data URI for Gemini if we want to send it inline
-      // but we can also send the URL if Gemini supports it from GCS.
-      // However, it's easier to send the data URI to Gemini but only the URL to the frontend.
       imageForGemini = `data:image/png;base64,${cleanedBuffer.toString('base64')}`;
     } catch (error: any) {
       console.error("LOG: Background removal failed. Using original image. Error:", error.message);
@@ -134,15 +122,10 @@ export const processClothing = ai.defineFlow(
     }
 
     try {
-      console.log(`LOG: Sending to Gemini with model gemini-3-pro-image-preview...`);
+      console.log(`LOG: Sending to Gemini with model gemini-1.5-flash-latest...`);
       
       const response = await ai.generate({
-        model: googleAI.model('gemini-3-pro-image-preview'),
-        config: {
-          // Setting thinkingLevel to LOW as MEDIUM is reported as unsupported in logs
-          // @ts-ignore
-          thinkingConfig: { thinkingLevel: 'LOW' },
-        } as any,
+        model: googleAI.model('gemini-1.5-flash-latest'),
         prompt: [
           { text: "Analyze the clothing item in the image. Extract category, color, style, fabric, texture, silhouette, and material type." },
           { media: { url: imageForGemini } },
@@ -157,13 +140,9 @@ export const processClothing = ai.defineFlow(
       
       console.log(`LOG: Gemini output: ${JSON.stringify(result).substring(0, 500)}`);
 
-      // Ensure we don't return massive base64 strings that cause truncation and "expected pattern" errors
-      if (result) {
-        delete (result as any).imageUri;
-        delete (result as any).cleanedImage;
-      }
+      delete (result as any).imageUri;
+      delete (result as any).cleanedImage;
 
-      // Optimized: Use Storage URL instead of massive Base64 string.
       const finalResponse = {
           ...result,
           cleanedImage: cleanedImageUrl,
@@ -213,11 +192,7 @@ export const generateOutfitImage = ai.defineFlow(
     }
 
     const response = await ai.generate({
-        model: googleAI.model('gemini-3-pro-image-preview'),
-        config: {
-            // @ts-ignore
-            thinkingConfig: { thinkingLevel: 'LOW' },
-        } as any,
+        model: googleAI.model('gemini-1.5-flash-latest'),
         prompt: [
             { text: "Create a realistic flat lay image of a complete outfit, arranging the provided clothing items logically from top to bottom. Ensure the final image is stylish and visually appealing, on a clean, neutral background." },
             ...imageParts,
@@ -246,7 +221,6 @@ export const generateOutfits = ai.defineFlow(
       return [];
     }
 
-    // Strip large image data from wardrobe items to prevent massive prompts and timeouts
     const cleanWardrobe = (wardrobe || []).map((item: any) => {
       const { imageUri, cleanedImage, thumbnailUri, ...rest } = item;
       return rest;
@@ -266,11 +240,7 @@ export const generateOutfits = ai.defineFlow(
 
     try {
         const response = await ai.generate({
-          model: googleAI.model('gemini-3-pro-preview'),
-          config: {
-            // @ts-ignore
-            thinkingConfig: { thinkingLevel: 'LOW' },
-          } as any,
+          model: googleAI.model('gemini-1.5-pro-latest'),
           prompt: [
             {
               text: promptText
@@ -285,10 +255,6 @@ export const generateOutfits = ai.defineFlow(
             console.warn('[generateOutfits] AI returned 0 suggestions. Response:', JSON.stringify(response, null, 2));
         }
 
-        // Disabled image generation because Gemini 3 Pro is a multimodal model (understanding images)
-        // but not an image generation model (like Imagen). Using it for image generation output
-        // was causing the indefinite hangs (9+ minutes) and timeouts reported.
-        // The app will now return suggestions instantly and use the frontend grid fallback.
         for (const suggestion of suggestions) {
           suggestion.generatedImageUrl = "";
         }
