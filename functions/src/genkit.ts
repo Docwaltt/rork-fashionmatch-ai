@@ -129,15 +129,16 @@ export const processClothing = ai.defineFlow(
     }
 
     try {
-      console.log(`LOG: Sending to Gemini with model gemini-1.5-flash-latest...`);
+      console.log(`LOG: Sending to Gemini with model gemini-3-flash-preview...`);
       
       const response = await ai.generate({
-        model: googleAI.model('gemini-1.5-flash-latest'),
+        model: googleAI.model('gemini-3-flash-preview'),
         prompt: [
           { text: "Analyze the clothing item in the image. Extract category, color, style, fabric, texture, silhouette, and material type." },
           { media: { url: imageForGemini } },
         ],
         output: { schema: ClothingSchema },
+        config: { responseMimeType: 'application/json' },
       });
 
       const result = response.output;
@@ -199,7 +200,7 @@ export const generateOutfitImage = ai.defineFlow(
     }
 
     const response = await ai.generate({
-        model: googleAI.model('gemini-1.5-flash-latest'),
+        model: googleAI.model('gemini-3-flash-preview'),
         prompt: [
             { text: "Create a realistic flat lay image of a complete outfit, arranging the provided clothing items logically from top to bottom. Ensure the final image is stylish and visually appealing, on a clean, neutral background." },
             ...imageParts,
@@ -247,13 +248,14 @@ export const generateOutfits = ai.defineFlow(
 
     try {
         const response = await ai.generate({
-          model: googleAI.model('gemini-1.5-pro-latest'),
+          model: googleAI.model('gemini-3-pro-preview'),
           prompt: [
             {
               text: promptText
             },
           ],
           output: { schema: z.array(OutfitSuggestionSchema) },
+          config: { responseMimeType: 'application/json' },
         });
 
         const suggestions = response.output || [];
