@@ -1,6 +1,37 @@
 import { GoogleAuth } from "google-auth-library";
+import { initializeApp, getApp, getApps, App } from "firebase-admin/app";
+import { credential } from "firebase-admin";
 
 const auth = new GoogleAuth();
+
+/**
+ * Gets or initializes a Firebase Admin App instance.
+ */
+export function getFirebaseApp(): App {
+  if (getApps().length > 0) {
+    return getApp();
+  }
+
+  const projectId = process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID;
+  const privateKey = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+
+  if (privateKey && clientEmail) {
+    return initializeApp({
+      credential: credential.cert({
+        projectId,
+        privateKey,
+        clientEmail,
+      }),
+      storageBucket: `${projectId}.appspot.com`,
+    });
+  }
+
+  return initializeApp({
+    projectId,
+    storageBucket: `${projectId}.appspot.com`,
+  });
+}
 
 /**
  * Helper to call Firebase Cloud Functions from a Node.js environment

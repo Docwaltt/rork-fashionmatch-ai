@@ -77,13 +77,20 @@ async function uploadToStorage(buffer: Buffer, contentType: string): Promise<str
     console.log(`LOG: Uploading to bucket: ${bucket.name}`);
     const fileName = `temp_cleaned/${randomUUID()}.png`;
     const file = bucket.file(fileName);
+    const downloadToken = randomUUID();
 
     await file.save(buffer, {
-        metadata: { contentType },
-        public: true,
+        metadata: {
+            contentType,
+            metadata: {
+                firebaseStorageDownloadTokens: downloadToken
+            }
+        },
     });
 
-    return `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+    // Construct a standard Firebase Storage Download URL
+    const encodedFileName = encodeURIComponent(fileName);
+    return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedFileName}?alt=media&token=${downloadToken}`;
 }
 
 export const processClothing = ai.defineFlow(
