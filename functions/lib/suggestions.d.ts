@@ -27,7 +27,9 @@ export declare const generateOutfitImage: import("@genkit-ai/core/lib/action-Dt9
     confidence: z.ZodNumber;
     cleanedImage: z.ZodOptional<z.ZodString>;
     isBackgroundRemoved: z.ZodBoolean;
+    material: z.ZodOptional<z.ZodString>;
     fabric: z.ZodOptional<z.ZodString>;
+    pattern: z.ZodOptional<z.ZodString>;
     texture: z.ZodOptional<z.ZodString>;
     silhouette: z.ZodOptional<z.ZodString>;
     materialType: z.ZodOptional<z.ZodString>;
@@ -42,7 +44,9 @@ export declare const generateOutfitImage: import("@genkit-ai/core/lib/action-Dt9
     id?: string | undefined;
     imageUri?: string | undefined;
     cleanedImage?: string | undefined;
+    material?: string | undefined;
     fabric?: string | undefined;
+    pattern?: string | undefined;
     texture?: string | undefined;
     silhouette?: string | undefined;
     materialType?: string | undefined;
@@ -57,7 +61,9 @@ export declare const generateOutfitImage: import("@genkit-ai/core/lib/action-Dt9
     id?: string | undefined;
     imageUri?: string | undefined;
     cleanedImage?: string | undefined;
+    material?: string | undefined;
     fabric?: string | undefined;
+    pattern?: string | undefined;
     texture?: string | undefined;
     silhouette?: string | undefined;
     materialType?: string | undefined;
@@ -74,7 +80,9 @@ export declare const generateOutfits: import("@genkit-ai/core/lib/action-Dt9i8CG
         confidence: z.ZodNumber;
         cleanedImage: z.ZodOptional<z.ZodString>;
         isBackgroundRemoved: z.ZodBoolean;
+        material: z.ZodOptional<z.ZodString>;
         fabric: z.ZodOptional<z.ZodString>;
+        pattern: z.ZodOptional<z.ZodString>;
         texture: z.ZodOptional<z.ZodString>;
         silhouette: z.ZodOptional<z.ZodString>;
         materialType: z.ZodOptional<z.ZodString>;
@@ -89,7 +97,9 @@ export declare const generateOutfits: import("@genkit-ai/core/lib/action-Dt9i8CG
         id?: string | undefined;
         imageUri?: string | undefined;
         cleanedImage?: string | undefined;
+        material?: string | undefined;
         fabric?: string | undefined;
+        pattern?: string | undefined;
         texture?: string | undefined;
         silhouette?: string | undefined;
         materialType?: string | undefined;
@@ -104,7 +114,9 @@ export declare const generateOutfits: import("@genkit-ai/core/lib/action-Dt9i8CG
         id?: string | undefined;
         imageUri?: string | undefined;
         cleanedImage?: string | undefined;
+        material?: string | undefined;
         fabric?: string | undefined;
+        pattern?: string | undefined;
         texture?: string | undefined;
         silhouette?: string | undefined;
         materialType?: string | undefined;
@@ -123,7 +135,9 @@ export declare const generateOutfits: import("@genkit-ai/core/lib/action-Dt9i8CG
         id?: string | undefined;
         imageUri?: string | undefined;
         cleanedImage?: string | undefined;
+        material?: string | undefined;
         fabric?: string | undefined;
+        pattern?: string | undefined;
         texture?: string | undefined;
         silhouette?: string | undefined;
         materialType?: string | undefined;
@@ -142,7 +156,9 @@ export declare const generateOutfits: import("@genkit-ai/core/lib/action-Dt9i8CG
         id?: string | undefined;
         imageUri?: string | undefined;
         cleanedImage?: string | undefined;
+        material?: string | undefined;
         fabric?: string | undefined;
+        pattern?: string | undefined;
         texture?: string | undefined;
         silhouette?: string | undefined;
         materialType?: string | undefined;

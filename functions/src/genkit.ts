@@ -8,14 +8,16 @@ export const ClothingSchema = z.object({
   color: z.string().describe('Primary color detected'),
   style: z.string().describe('Fashion style (e.g., Casual, Formal, Vintage, Streetwear)'),
   confidence: z.number().describe('AI certainty score from 0 to 1'),
-  cleanedImage: z.string().optional().describe('Base64 string of the image with background removed'),
+  cleanedImage: z.string().optional().describe('Base64 string or URL of the image with background removed'),
   isBackgroundRemoved: z.boolean().describe('Whether the background removal process was successful'),
-  fabric: z.string().optional().describe('Fabric texture (e.g., knit, denim, silk, cotton, leather)'),
-  texture: z.string().optional().describe('Visual texture of the fabric (e.g., smooth, ribbed, fuzzy, bumpy)'),
-  silhouette: z.string().optional().describe('Item silhouette (e.g., oversized, tailored, A-line, slim)'),
-  materialType: z.string().optional().describe('Material of the cloth (e.g., Cotton, Polyester, Wool)'),
+  material: z.string().optional().describe('The material of the item (e.g., Denim, Leather, Wool)'),
+  fabric: z.string().optional().describe('Fabric texture (e.g., knit, woven, silk, cotton)'),
+  pattern: z.string().optional().describe('Pattern type (e.g., Solid, Striped, Plaid)'),
+  texture: z.string().optional().describe('Visual texture (e.g., smooth, ribbed, fuzzy)'),
+  silhouette: z.string().optional().describe('Item silhouette (e.g., oversized, tailored, slim)'),
+  materialType: z.string().optional().describe('Nature of material (e.g., Synthetic, Natural)'),
   hasPattern: z.boolean().optional().describe('Whether the cloth has patterns or not'),
-  patternDescription: z.string().optional().describe('A description of the pattern if it exists (e.g., floral, striped, plaid)'),
+  patternDescription: z.string().optional().describe('Detailed description of the pattern'),
 });
 
 export const ai = genkit({ 

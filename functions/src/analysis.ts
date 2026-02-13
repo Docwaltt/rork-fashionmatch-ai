@@ -112,7 +112,7 @@ export const processClothing = ai.defineFlow(
       const response = await ai.generate({
         model: googleAI.model('gemini-3-flash-preview'),
         prompt: [
-          { text: "Analyze the clothing item in the image. Extract category, color, style, fabric, texture, silhouette, and material type." },
+          { text: "Analyze the clothing item in the image. Extract the category, color, style, material, fabric, pattern, texture, silhouette, material type, and pattern description. Determine if it has a pattern. Provide your confidence score." },
           { media: { url: imageForGemini } },
         ],
         output: { schema: ClothingSchema },
