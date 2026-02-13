@@ -1,4 +1,4 @@
-import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
+import { onRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import type { Request } from 'firebase-functions/v2/https';
 import type { Response } from 'express';
@@ -14,35 +14,6 @@ const googleGenAiApiKey = defineSecret('GOOGLE_GENAI_API_KEY');
 const clipdropApiKey = defineSecret('CLIPDROP_API_KEY');
 const googleServiceAccountEmail = defineSecret('GOOGLE_SERVICE_ACCOUNT_EMAIL');
 const googlePrivateKey = defineSecret('GOOGLE_PRIVATE_KEY');
-
-// 1. Callable Function (for direct usage from App via SDK)
-export const analyzeImage = onCall({
-  memory: '2GiB',
-  timeoutSeconds: 300,
-  region: 'us-central1',
-  invoker: 'public', // Allow unauthenticated access
-  secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey],
-}, async (request) => {
-  try {
-    console.log("analyzeImage called. Request data keys:", Object.keys(request.data || {}));
-    
-    // Check input payload structure
-    const input = request.data;
-    if (input && (input.imgData || input.image)) {
-        console.log("Image data present. Length:", (input.imgData || input.image).length);
-    } else {
-        console.warn("WARNING: No image data found in request!");
-    }
-
-    console.log("Starting processClothing flow...");
-    const result = await processClothing.run(request.data);
-    console.log("processClothing flow completed. Result keys:", Object.keys(result || {}));
-    return result;
-  } catch (error: any) {
-    console.error("analyzeImage error:", error);
-    throw new HttpsError('internal', error.message, error);
-  }
-});
 
 // Export generateOutfits as an HTTP function for more control
 export const generateOutfitsFn = onRequest({
@@ -71,7 +42,7 @@ export const generateOutfitsFn = onRequest({
   }
 });
 
-// 2. HTTP Function (for usage via tRPC backend or raw HTTP fetch)
+// HTTP Function (for usage via tRPC backend or raw HTTP fetch)
 export const processClothingFn = onRequest({
   memory: '2GiB',
   minInstances: 0,

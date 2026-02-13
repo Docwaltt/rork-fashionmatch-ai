@@ -18,16 +18,15 @@ export const wardrobeRouter = router({
     return wardrobeData.items;
   }),
 
-  analyze: authedProcedure
+  processClothing: authedProcedure
     .input(z.object({ imageUrl: z.string(), gender: z.string().optional() }))
     .mutation(async ({ input }) => {
       try {
-        console.log("[Wardrobe] Calling analyzeImage function via FirebaseUtils");
-        // Use callFirebaseFunction which handles auth and connects to the correct Cloud Run instance
-        const analysisResult = await callFirebaseFunction('analyzeImage', {
-          image: input.imageUrl,
+        console.log("[Wardrobe] Calling processClothingFn via FirebaseUtils");
+        // Use callFirebaseFunction to call the specialized processClothingFn
+        const analysisResult = await callFirebaseFunction('processClothingFn', {
+          imgData: input.imageUrl,
           gender: input.gender,
-          background: 'remove'
         });
 
         if (!analysisResult || analysisResult.error) {
@@ -37,46 +36,31 @@ export const wardrobeRouter = router({
           });
         }
 
-        // To prevent truncated responses in the mobile frontend, ensure we don't return massive base64 strings
-        // The Cloud Function already returns a permanent Download URL in 'cleanedImageUrl'
         const result = { ...analysisResult };
-        delete result.imageUri;
         
-        // If cleanedImageUrl is missing but cleanedImage exists and is a URL, use it
+        // Ensure we have a valid image URI for the frontend
         if (!result.cleanedImageUrl && result.cleanedImage && String(result.cleanedImage).startsWith('http')) {
             result.cleanedImageUrl = result.cleanedImage;
         }
 
-        // If cleanedImage is a base64 string without a prefix, add it for safety
-        if (result.cleanedImage && !String(result.cleanedImage).startsWith('http') && !String(result.cleanedImage).startsWith('data:')) {
-            result.cleanedImage = `data:image/png;base64,${result.cleanedImage}`;
-        }
-
-        // Now safe to remove the potentially large base64 'cleanedImage' field if it's redundant
-        if (result.cleanedImageUrl && result.cleanedImage && String(result.cleanedImage).length > 1000) {
-            delete result.cleanedImage;
-        }
-
         return result;
       } catch (error: any) {
-        console.error("[Wardrobe] Analyze mutation failed:", error.message);
+        console.error("[Wardrobe] processClothing mutation failed:", error.message);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `An error occurred during image analysis: ${error.message}`,
+          message: `An error occurred during image processing: ${error.message}`,
         });
       }
     }),
 
   addItem: authedProcedure
-    .input(z.any()) // Using any to be flexible with the ClothingItem structure from the UI
+    .input(z.any()) 
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.uid;
 
       try {
         let finalImageUri = input.imageUri;
 
-        // Fix corruption bug: Only prepend data URI prefix if it's base64 and missing it.
-        // If it's already a URL (starts with http), do NOT prepend anything.
         if (finalImageUri && !finalImageUri.startsWith('http') && !finalImageUri.startsWith('data:')) {
             finalImageUri = `data:image/png;base64,${finalImageUri}`;
         }
@@ -126,7 +110,6 @@ export const wardrobeRouter = router({
           };
         }
 
-        // Strip images from wardrobe before sending to AI to keep prompt size manageable
         const cleanItems = (wardrobeData.items || []).map((item: any) => {
             const { imageUri, cleanedImage, cleanedImageUrl, ...rest } = item;
             return rest;
@@ -155,7 +138,6 @@ export const wardrobeRouter = router({
     }))
     .mutation(async ({ input }) => {
       try {
-        // Strip images from input wardrobe to keep request size manageable
         const cleanWardrobe = (input.wardrobe || []).map((item: any) => {
           const { imageUri, cleanedImage, cleanedImageUrl, ...rest } = item;
           return rest;
