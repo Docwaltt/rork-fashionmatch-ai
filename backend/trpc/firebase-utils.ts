@@ -35,14 +35,12 @@ export function getFirebaseApp(): App {
 
 /**
  * Helper to call Firebase Cloud Functions from a Node.js environment
- * using authenticated HTTP requests. This bypasses limitations of the
- * Firebase Client SDK in Node.js and allows calling functions in different projects.
+ * using authenticated HTTP requests.
  */
 export async function callFirebaseFunction(functionName: string, data: any) {
   const projectId = process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || 'closet-app-1337';
   const region = process.env.FIREBASE_REGION || 'us-central1';
 
-  // Allow direct URL override via env var: e.g. FUNCTION_ANALYZEIMAGE_URL
   let url: string | undefined;
   if (functionName === 'analyzeImage') url = process.env.FUNCTION_ANALYZEIMAGE_URL;
   if (functionName === 'suggestOutfit') url = process.env.FUNCTION_SUGGESTOUTFIT_URL;
@@ -50,17 +48,12 @@ export async function callFirebaseFunction(functionName: string, data: any) {
   if (functionName === 'processClothingFn') url = process.env.FUNCTION_PROCESSCLOTHINGFN_URL;
 
   if (!url) {
-    // Specific naming logic based on project conventions
-    const isStandardCallable = functionName === 'analyzeImage';
-
-    if (isStandardCallable || functionName === 'generateOutfitsFn' || functionName === 'suggestOutfit') {
-      // Standard Firebase v2 Callable URL pattern (Cloud Run format)
+    if (functionName === 'generateOutfitsFn' || functionName === 'suggestOutfit') {
       const name = (functionName === 'suggestOutfit') ? 'generateOutfitsFn' : functionName;
       url = `https://${name.toLowerCase()}-pfc64ufnsq-uc.a.run.app`;
     } else if (functionName === 'processClothingFn' || functionName === 'analyze') {
       url = `https://processclothingfn-pfc64ufnsq-uc.a.run.app`;
     } else {
-      // Default fallback
       url = `https://${region}-${projectId}.cloudfunctions.net/${functionName}`;
     }
   }
@@ -72,115 +65,25 @@ export async function callFirebaseFunction(functionName: string, data: any) {
     const response = await client.request({
       url,
       method: 'POST',
-      data: { data }, // standard wrapper for Firebase Callable-like onRequest functions
-      timeout: 120000, // 2 minutes timeout
-      responseType: 'text', // Get raw text to handle malformed responses
+      data: { data },
+      timeout: 120000, 
+      responseType: 'json', // Use native JSON parsing
     });
 
-    // Parse response - handle malformed JSON like "null{...}" or other junk
-    let result: any;
-    
-    // If response.data is already an object, use it directly to avoid stringify/parse cycles
-    if (response.data && typeof response.data === 'object') {
-      console.log(`[FirebaseUtils] Function ${functionName} returned object directly`);
-      result = response.data;
-    } else {
-      const rawText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-      console.log(`[FirebaseUtils] Raw response length: ${rawText.length}. Preview: ${rawText.substring(0, 200)}`);
-      
-      // Try to parse as-is first
-      try {
-        result = JSON.parse(rawText);
-      } catch (parseError: any) {
-        console.log(`[FirebaseUtils] Direct JSON parse failed (${parseError.message}), attempting recovery...`);
-        console.log(`[FirebaseUtils] Raw response start: ${rawText.substring(0, 50)}`);
-        console.log(`[FirebaseUtils] Raw response end: ${rawText.substring(rawText.length - 50)}`);
+    let result = response.data;
 
-        // Handle "null{...}" or other prefix/suffix garbage by finding the core JSON part
-        // Using greedy match to ensure we capture full nested objects
-        const match = rawText.match(/(\[.*\]|\{.*\})/s);
-
-        if (match) {
-          try {
-            result = JSON.parse(match[0]);
-            console.log(`[FirebaseUtils] Successfully recovered JSON using regex extraction`);
-          } catch (secondError) {
-            // If regex-based extraction still fails, try one more time with manual slicing
-            // just in case the regex was still problematic
-            const firstBrace = rawText.indexOf('{');
-            const firstBracket = rawText.indexOf('[');
-            const lastBrace = rawText.lastIndexOf('}');
-            const lastBracket = rawText.lastIndexOf(']');
-
-            const isArray = firstBracket !== -1 && (firstBrace === -1 || (firstBracket < firstBrace && firstBracket !== -1));
-            const startIdx = isArray ? firstBracket : firstBrace;
-            const endIdx = isArray ? lastBracket : lastBrace;
-
-            if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-              try {
-                const jsonPart = rawText.substring(startIdx, endIdx + 1);
-                result = JSON.parse(jsonPart);
-                console.log(`[FirebaseUtils] Successfully recovered JSON using manual slicing`);
-              } catch (thirdError) {
-                throw parseError; // Re-throw original error if all recovery fails
-              }
-            } else {
-              throw parseError;
-            }
-          }
-        } else {
-          throw parseError;
-        }
-      }
+    // Handle common Firebase response wrapping
+    if (result && result.result !== undefined) {
+      result = result.result;
+    } else if (result && result.data !== undefined && !result.category && !Array.isArray(result)) {
+      result = result.data;
     }
 
-    // Log response type for diagnostics
-    console.log(`[FirebaseUtils] Function ${functionName} responded with type: ${typeof result}`);
-
-    if (result === null || result === undefined) {
-      console.warn(`[FirebaseUtils] Function ${functionName} returned null/undefined`);
-      return {};
-    }
-
-    // Check for HTML error pages
-    if (typeof result === 'string' && result.includes('<html')) {
-      throw new Error("Cloud Function returned an HTML error page. Check function logs for crashes.");
-    }
-
-    // If result is an array, return it directly without unwrapping
-    if (Array.isArray(result)) {
-      console.log(`[FirebaseUtils] Function ${functionName} returned array with ${result.length} items`);
-      return result;
-    }
-
-    let iterations = 0;
-    // Specific unwrapping for Firebase/Genkit structures
-    while (result && typeof result === 'object' && iterations < 3) {
-      if (result.result !== undefined) {
-          result = result.result;
-      } else if (result.data !== undefined && !result.category && !Array.isArray(result)) {
-          // Only unwrap 'data' if it looks like a wrapper (not a result with a 'data' field)
-          result = result.data;
-      } else {
-          break;
-      }
-      iterations++;
-    }
-
-    // Ensure we return an object if possible to avoid 'spreading a string' issues in callers
     if (result === null || result === undefined) return {};
-    if (typeof result !== 'object') {
-        console.warn(`[FirebaseUtils] Function ${functionName} returned non-object:`, typeof result);
-        return { data: result }; // Wrap it to avoid spreading issues
-    }
+    
     return result;
   } catch (error: any) {
     console.error(`[FirebaseUtils] Error calling function ${functionName}:`, error.message);
-    if (error.response) {
-      console.error(`[FirebaseUtils] Response status: ${error.response.status}`);
-      const errorData = typeof error.response.data === 'string' ? error.response.data : JSON.stringify(error.response.data);
-      console.error(`[FirebaseUtils] Response data:`, errorData.substring(0, 500));
-    }
     throw error;
   }
 }
