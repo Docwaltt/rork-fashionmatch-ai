@@ -3,7 +3,8 @@ import { defineSecret } from 'firebase-functions/params';
 import type { Request } from 'firebase-functions/v2/https';
 import type { Response } from 'express';
 import { initializeApp } from 'firebase-admin/app';
-import { processClothing, generateOutfits } from './genkit.js';
+import { processClothing } from './analysis.js';
+import { generateOutfits } from './suggestions.js';
 
 // Initialize Firebase Admin
 initializeApp();
@@ -24,10 +25,6 @@ export const analyzeImage = onCall({
 }, async (request) => {
   try {
     console.log("analyzeImage called. Request data keys:", Object.keys(request.data || {}));
-    
-    // Log if secrets are available (without logging values)
-    console.log("GOOGLE_GENAI_API_KEY available:", !!googleGenAiApiKey.value());
-    console.log("CLIPDROP_API_KEY available:", !!clipdropApiKey.value());
     
     // Check input payload structure
     const input = request.data;
@@ -135,4 +132,3 @@ export const processClothingFn = onRequest({
     });
   }
 });
-// Force redeploy
