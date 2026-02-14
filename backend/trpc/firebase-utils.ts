@@ -67,40 +67,10 @@ export async function callFirebaseFunction(functionName: string, data: any) {
       method: 'POST',
       data: { data },
       timeout: 120000, 
-      responseType: 'text', // Get raw text to handle potential garbage prefixes like 'null'
+      responseType: 'json', // Native JSON parsing is the definitive fix for the position 4 error
     });
 
-    const rawText = String(response.data);
-    let result: any;
-
-    try {
-      // 1. Try standard parse first
-      result = JSON.parse(rawText);
-    } catch (e) {
-      console.warn(`[FirebaseUtils] Direct JSON parse failed, attempting recovery for: ${rawText.substring(0, 50)}...`);
-      
-      // 2. Recovery: find the first { or [ and last } or ]
-      const firstBrace = rawText.indexOf('{');
-      const firstBracket = rawText.indexOf('[');
-      const lastBrace = rawText.lastIndexOf('}');
-      const lastBracket = rawText.lastIndexOf(']');
-
-      const startIdx = (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) ? firstBrace : firstBracket;
-      const endIdx = (startIdx === firstBrace) ? lastBrace : lastBracket;
-
-      if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-        const cleanedText = rawText.substring(startIdx, endIdx + 1);
-        try {
-          result = JSON.parse(cleanedText);
-          console.log(`[FirebaseUtils] Successfully recovered JSON via substring extraction.`);
-        } catch (innerError: any) {
-          console.error(`[FirebaseUtils] Recovery parse failed: ${innerError.message}`);
-          throw new Error(`Failed to parse function response: ${rawText.substring(0, 100)}`);
-        }
-      } else {
-        throw new Error(`Invalid response format from function: ${rawText.substring(0, 100)}`);
-      }
-    }
+    let result = response.data;
 
     // Handle common Firebase/Genkit response wrapping
     if (result && result.result !== undefined) {
