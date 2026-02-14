@@ -22,8 +22,9 @@ export const wardrobeRouter = router({
     .input(z.object({ imageUrl: z.string(), gender: z.string().optional() }))
     .mutation(async ({ input }) => {
       try {
-        console.log("[Wardrobe] Calling processClothingFn via FirebaseUtils");
-        // Use callFirebaseFunction to call the specialized processClothingFn
+        console.log("[Wardrobe] [v2.2] CALLING processClothingFn");
+        
+        // Pass input directly, as the Cloud Function now handles normalization
         const analysisResult = await callFirebaseFunction('processClothingFn', {
           imgData: input.imageUrl,
           gender: input.gender,
@@ -32,13 +33,12 @@ export const wardrobeRouter = router({
         if (!analysisResult || analysisResult.error) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: analysisResult?.error || "Image analysis failed to return a result.",
+            message: analysisResult?.error || "AI failed to process image.",
           });
         }
 
         const result = { ...analysisResult };
         
-        // Ensure we have a valid image URI for the frontend
         if (!result.cleanedImageUrl && result.cleanedImage && String(result.cleanedImage).startsWith('http')) {
             result.cleanedImageUrl = result.cleanedImage;
         }
@@ -48,7 +48,7 @@ export const wardrobeRouter = router({
         console.error("[Wardrobe] processClothing mutation failed:", error.message);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `An error occurred during image processing: ${error.message}`,
+          message: error.message || "An error occurred during image processing.",
         });
       }
     }),
