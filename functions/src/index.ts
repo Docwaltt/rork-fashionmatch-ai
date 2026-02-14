@@ -25,7 +25,6 @@ export const generateOutfitsFn = onRequest({
   secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey],
 }, async (req: Request, res: Response) => {
   try {
-    // Ultra-flexible input parsing
     let input = req.body.data || req.body;
     if (typeof input === 'string') {
         try { input = JSON.parse(input); } catch(e) {}
@@ -33,10 +32,14 @@ export const generateOutfitsFn = onRequest({
     
     console.log("Starting generateOutfits flow...");
     const result = await generateOutfits.run(input);
-    res.status(200).json({ result }); 
+    
+    // Explicit JSON response with terminal end() to prevent Cloud Run stream pollution
+    res.status(200).json({ result });
+    res.end();
   } catch (error: any) {
     console.error("generateOutfitsFn error:", error);
     res.status(500).json({ error: { message: error.message } });
+    res.end();
   }
 });
 
@@ -51,33 +54,32 @@ export const processClothingFn = onRequest({
   secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey], 
 }, async (req: Request, res: Response) => {
   try {
-    // Ultra-flexible input parsing to handle different tRPC client/backend quirks
     let input = req.body;
-    
-    // 1. Unwrap 'data' if it exists (Firebase Callable convention)
     if (input && input.data) input = input.data;
-    
-    // 2. Handle stringified body
     if (typeof input === 'string') {
         try { input = JSON.parse(input); } catch(e) {}
     }
 
-    // 3. Final normalization of the image field
     const imgData = input?.imgData || input?.image || input?.imageUrl || input?.data;
 
     if (!imgData) {
-      console.error("DEBUG: Input data missing image field. Body received:", JSON.stringify(req.body).substring(0, 200));
       res.status(400).json({ error: "Missing image data. Expected 'imgData' field." });
+      res.end();
       return;
     }
 
     console.log("Starting processClothing flow...");
     const result = await processClothing.run({ ...input, imgData });
+    
+    // Explicit JSON response with terminal end() to prevent Cloud Run stream pollution
     res.status(200).json({ result });
+    res.end();
   } catch (error: any) {
     console.error("Error in processClothingFn execution:", error);
     res.status(500).json({ 
       error: { message: error.message }
     });
+    res.end();
   }
 });
+// Sync complete v3.1

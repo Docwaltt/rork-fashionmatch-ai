@@ -59,61 +59,54 @@ export async function callFirebaseFunction(functionName: string, data: any) {
     }
   }
 
-  console.log(`[DEBUG] [FirebaseUtils] [v2.3] CALLING: ${functionName} at ${url}`);
+  console.log(`[DEBUG] [v3.0] CALLING: ${functionName}`);
 
   try {
-    // 1. Manually fetch the ID token for the target URL
     const client = await auth.getIdTokenClient(url);
     const tokenResponse = await client.getRequestHeaders();
     const authHeader = tokenResponse.Authorization;
 
-    // 2. Use direct axios call for absolute control over the body
     const response = await axios.post(url, 
-      { data }, // Wrap in 'data' to match Firebase Callable-like convention
+      { data }, 
       {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': authHeader,
         },
         timeout: 120000,
-        responseType: 'text',
+        responseType: 'arraybuffer', // Get raw bytes to bypass string decoding issues
       }
     );
 
-    const rawText = String(response.data);
-    console.log(`[DEBUG] [FirebaseUtils] RAW START: "${rawText.substring(0, 15)}"`);
+    // Convert raw bytes to string
+    const rawString = Buffer.from(response.data).toString('utf8');
+    
+    // THE FIX: Aggressively strip any non-JSON prefix (like 'null' or whitespace)
+    const firstBrace = rawString.indexOf('{');
+    const firstBracket = rawString.indexOf('[');
+    const startIdx = (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) ? firstBrace : firstBracket;
 
+    if (startIdx === -1) {
+        throw new Error(`Invalid non-JSON response: ${rawString.substring(0, 100)}`);
+    }
+
+    const jsonString = rawString.substring(startIdx);
     let result: any;
     
-    // Robust extraction: find the JSON body even if junk is prepended
-    const firstBrace = rawText.indexOf('{');
-    const lastBrace = rawText.lastIndexOf('}');
-
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      const cleanedText = rawText.substring(firstBrace, lastBrace + 1);
-      try {
-        result = JSON.parse(cleanedText);
-      } catch (parseError: any) {
-        console.error(`[DEBUG] [FirebaseUtils] Parse error: ${parseError.message}`);
+    try {
+        result = JSON.parse(jsonString);
+    } catch (parseError: any) {
+        console.error(`[DEBUG] Final parse failed. Raw start: ${rawString.substring(0, 20)}`);
         throw parseError;
-      }
-    } else {
-      result = JSON.parse(rawText);
     }
 
     if (result && result.result !== undefined) {
       result = result.result;
     }
 
-    if (result === null || result === undefined) return {};
-    
-    console.log(`[DEBUG] [FirebaseUtils] SUCCESS: ${functionName}. Keys:`, Object.keys(result));
-    return result;
+    return result || {};
   } catch (error: any) {
-    console.error(`[DEBUG] [FirebaseUtils] FAILED function ${functionName}:`, error.message);
-    if (error.response && error.response.data) {
-        console.error(`[DEBUG] [FirebaseUtils] RAW ERROR BODY:`, String(error.response.data).substring(0, 200));
-    }
+    console.error(`[DEBUG] FAILED function ${functionName}:`, error.message);
     throw error;
   }
 }

@@ -21,10 +21,21 @@ export const wardrobeRouter = router({
   processClothing: authedProcedure
     .input(z.object({ imageUrl: z.string(), gender: z.string().optional() }))
     .mutation(async ({ input }) => {
+      // DUMMY TEST: If this works, the issue is in the AI/Firebase calling logic.
+      // If this fails with the same 'position 4' error, the issue is in the tRPC/Hono infrastructure.
+      console.log("[DEBUG] [Wardrobe] processClothing DUMMY TEST START");
+      return {
+        id: "test_id",
+        category: "Test Category",
+        color: "Test Color",
+        style: "Test Style",
+        confidence: 1.0,
+        isBackgroundRemoved: true,
+        material: "Test Material"
+      };
+      
+      /* Original logic commented out for testing
       try {
-        console.log("[Wardrobe] [v2.2] CALLING processClothingFn");
-        
-        // Pass input directly, as the Cloud Function now handles normalization
         const analysisResult = await callFirebaseFunction('processClothingFn', {
           imgData: input.imageUrl,
           gender: input.gender,
@@ -51,6 +62,7 @@ export const wardrobeRouter = router({
           message: error.message || "An error occurred during image processing.",
         });
       }
+      */
     }),
 
   addItem: authedProcedure
