@@ -24,7 +24,6 @@ import { LinearGradient } from "expo-linear-gradient";
 
 // Firebase Direct Imports
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { getFirestore, doc, updateDoc, arrayUnion, setDoc, getDoc } from 'firebase/firestore';
 import { app } from '@/lib/firebase';
 
 import Colors from "@/constants/colors";
@@ -67,7 +66,7 @@ export default function AddItemScreen() {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisSuccess, setAnalysisSuccess] = useState<boolean>(false);
   const [isSavingItem, setIsSavingItem] = useState(false);
-  const { refreshWardrobe } = useWardrobe();
+  const { addItem } = useWardrobe();
   
   const [material, setMaterial] = useState('');
   const [fabric, setFabric] = useState('');
@@ -90,7 +89,7 @@ export default function AddItemScreen() {
     try {
       const base64Image = await compressAndConvertToBase64(imageUri);
       
-      // DIRECT CALL to Firebase Callable Function
+      // CALL Callable Cloud Function directly
       const functions = getFunctions(app, 'us-central1');
       const processClothing = httpsCallable(functions, 'processClothingCallable');
       const result: any = await processClothing({ imgData: base64Image });
@@ -98,6 +97,8 @@ export default function AddItemScreen() {
 
       setAnalysisError(null);
       setAnalysisSuccess(true);
+      
+      // Use the storage URL provided by the AI flow
       setProcessedImage(data.cleanedImageUrl || data.cleanedImage || capturedImage);
       setDetectedColors(data.color ? [data.color] : []);
       setMaterial(String(data.material || ''));
@@ -149,30 +150,32 @@ export default function AddItemScreen() {
   };
 
   const handleSaveItem = async () => {
-    if (!processedImage || !selectedCategory || !userProfile?.id) return;
+    if (!processedImage || !selectedCategory) return;
     setIsSavingItem(true);
     
+    // NEW ITEM OBJECT: Perfectly aligned with ClothingSchema and ClothingItem types
     const newItem = {
-      id: Date.now().toString(), imageUri: processedImage, category: selectedCategory,
-      colors: detectedColors, addedAt: Date.now(), color: detectedColors[0] || 'unknown',
-      style: style || 'casual', confidence: 1.0, material, fabric, pattern, texture,
-      silhouette, patternDescription, materialType, hasPattern, userId: userProfile.id
+      id: Date.now().toString(), 
+      imageUri: processedImage, 
+      category: selectedCategory,
+      colors: detectedColors, 
+      addedAt: Date.now(), 
+      color: detectedColors[0] || 'unknown',
+      style: style || 'casual', 
+      confidence: 1.0, 
+      material, 
+      fabric, 
+      pattern, 
+      texture,
+      silhouette, 
+      patternDescription, 
+      materialType, 
+      hasPattern
     };
 
     try {
-      // DIRECT WRITE to Firestore
-      const db = getFirestore(app);
-      const wardrobeRef = doc(db, "wardrobe", userProfile.id);
-      
-      // Ensure document exists
-      const docSnap = await getDoc(wardrobeRef);
-      if (!docSnap.exists()) {
-          await setDoc(wardrobeRef, { items: [newItem] });
-      } else {
-          await updateDoc(wardrobeRef, { items: arrayUnion(newItem) });
-      }
-      
-      await refreshWardrobe();
+      // Use standardized context function which handles Firestore, Storage, and UI Refresh
+      await addItem(newItem);
       Alert.alert("Added!", "Item has been added to your collection.", [{ text: "OK", onPress: handleReset }]);
     } catch (error: any) {
       console.error("[Add] Direct Save Failed:", error.message);
