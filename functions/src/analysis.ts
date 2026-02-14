@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto';
 import { ai, ClothingSchema } from './genkit.js';
 
 const clipdropApiKey = process.env.CLIPDROP_API_KEY;
+const VERSION = "v3.0.1-gemini3"; // Version tag for log tracking
 
 async function removeBackgroundWithClipdrop(imageBuffer: Buffer): Promise<Buffer> {
   if (!clipdropApiKey) {
@@ -74,6 +75,7 @@ export const processClothing = ai.defineFlow(
     outputSchema: z.any(),
   },
   async (inputData: any) => {
+    console.log(`[FLOW] processClothing START - Version: ${VERSION}`);
     let imageUri = inputData?.imgData || inputData?.image || inputData?.data || (typeof inputData === 'string' ? inputData : "");
 
     if (!imageUri) {
@@ -103,7 +105,6 @@ export const processClothing = ai.defineFlow(
     }
 
     try {
-      // Switching back to Gemini 3 as per your requirement
       console.log(`LOG: Sending to Gemini with model gemini-3-flash-preview...`);
       
       const response = await ai.generate({
@@ -130,13 +131,14 @@ export const processClothing = ai.defineFlow(
           ...result,
           cleanedImage: cleanedImageUrl,
           cleanedImageUrl: cleanedImageUrl,
-          isBackgroundRemoved
+          isBackgroundRemoved,
+          flowVersion: VERSION
       };
       return finalResponse;
 
     } catch (geminiError: any) {
       console.error("LOG: Gemini analysis failed:", geminiError.message);
-      return { error: `AI Analysis Failed: ${geminiError.message}`, isBackgroundRemoved, cleanedImage: cleanedImageUrl };
+      return { error: `AI Analysis Failed: ${geminiError.message}`, isBackgroundRemoved, cleanedImage: cleanedImageUrl, flowVersion: VERSION };
     }
   }
 );

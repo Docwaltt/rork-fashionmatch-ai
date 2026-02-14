@@ -52,13 +52,14 @@ export async function callFirebaseFunction(functionName: string, data: any) {
       const name = (functionName === 'suggestOutfit') ? 'generateOutfitsFn' : functionName;
       url = `https://${name.toLowerCase()}-pfc64ufnsq-uc.a.run.app`;
     } else if (functionName === 'processClothingFn' || functionName === 'analyze') {
+      // Use the base URL to always hit the latest revision
       url = `https://processclothingfn-pfc64ufnsq-uc.a.run.app`;
     } else {
       url = `https://${region}-${projectId}.cloudfunctions.net/${functionName}`;
     }
   }
 
-  console.log(`[DEBUG] [FirebaseUtils] START calling function: ${functionName} at ${url}`);
+  console.log(`[DEBUG] [FirebaseUtils] [v2.1] CALLING: ${functionName} at ${url}`);
 
   try {
     const client = await auth.getIdTokenClient(url);
@@ -67,51 +68,43 @@ export async function callFirebaseFunction(functionName: string, data: any) {
       method: 'POST',
       data: { data },
       timeout: 120000, 
-      responseType: 'text', // Back to text to see EXACTLY what we are getting
+      responseType: 'text', 
     });
 
-    const rawData = response.data;
-    console.log(`[DEBUG] [FirebaseUtils] RAW response from ${functionName}:`, String(rawData).substring(0, 500));
+    const rawText = String(response.data);
+    
+    // Log the first few characters to detect 'null' or other prefixes
+    console.log(`[DEBUG] [FirebaseUtils] RAW START: "${rawText.substring(0, 10)}"`);
 
     let result: any;
-    try {
-        result = JSON.parse(String(rawData));
-    } catch (parseError: any) {
-        console.error(`[DEBUG] [FirebaseUtils] FAILED to parse JSON from ${functionName}. Error: ${parseError.message}`);
-        
-        // Final, robust recovery attempt: find first { and last }
-        const text = String(rawData);
-        const start = text.indexOf('{');
-        const end = text.lastIndexOf('}');
-        if (start !== -1 && end !== -1) {
-            const potentialJson = text.substring(start, end + 1);
-            try {
-                result = JSON.parse(potentialJson);
-                console.log(`[DEBUG] [FirebaseUtils] RECOVERED JSON successfully.`);
-            } catch (recoveryError) {
-                console.error(`[DEBUG] [FirebaseUtils] RECOVERY FAILED.`);
-                throw parseError;
-            }
-        } else {
-            throw parseError;
-        }
+    
+    // Robust extraction: find the JSON body even if junk is prepended
+    const firstBrace = rawText.indexOf('{');
+    const lastBrace = rawText.lastIndexOf('}');
+
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      const cleanedText = rawText.substring(firstBrace, lastBrace + 1);
+      try {
+        result = JSON.parse(cleanedText);
+      } catch (parseError: any) {
+        console.error(`[DEBUG] [FirebaseUtils] Parse error: ${parseError.message}`);
+        throw parseError;
+      }
+    } else {
+      // Fallback for non-braced responses or errors
+      result = JSON.parse(rawText);
     }
 
+    // Unwrap Firebase v2 'result' wrapper
     if (result && result.result !== undefined) {
       result = result.result;
-    } else if (result && result.data !== undefined && !result.category && !Array.isArray(result)) {
-      result = result.data;
     }
 
     if (result === null || result === undefined) return {};
     
-    console.log(`[DEBUG] [FirebaseUtils] SUCCESS calling ${functionName}. Result keys:`, Object.keys(result));
     return result;
   } catch (error: any) {
-    console.error(`[DEBUG] [FirebaseUtils] ERROR calling function ${functionName}:`, error.message);
-    if (error.response && error.response.data) {
-        console.error(`[DEBUG] [FirebaseUtils] ERROR details:`, String(error.response.data).substring(0, 500));
-    }
+    console.error(`[DEBUG] [FirebaseUtils] FAILED function ${functionName}:`, error.message);
     throw error;
   }
 }
