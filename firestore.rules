@@ -1,8 +1,18 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    // Wardrobe Rules: Each document is an individual clothing item
+    match /wardrobe/{itemId} {
+      // Allow user to read/update/delete only their own items
+      allow read, update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+      // Allow user to create items only for themselves
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+    }
+    
+    // User Profile Rules: Users can only see and edit their own profile
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }
