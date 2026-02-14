@@ -21,7 +21,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { trpc } from "@/lib/trpc";
+
+// Firebase Direct Imports
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFirestore, doc, updateDoc, arrayUnion, setDoc, getDoc } from 'firebase/firestore';
+import { app } from '@/lib/firebase';
+
 import Colors from "@/constants/colors";
 import { useWardrobe } from "@/contexts/WardrobeContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -37,7 +42,6 @@ const compressAndConvertToBase64 = async (uri: string): Promise<string> => {
     );
     return `data:image/jpeg;base64,${manipulated.base64}`;
   } catch (error) {
-    console.warn("Image manipulation failed, falling back to fetch.", error);
     const response = await fetch(uri);
     const blob = await response.blob();
     return new Promise((resolve, reject) => {
@@ -63,7 +67,7 @@ export default function AddItemScreen() {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisSuccess, setAnalysisSuccess] = useState<boolean>(false);
   const [isSavingItem, setIsSavingItem] = useState(false);
-  const { addItem } = useWardrobe();
+  const { refreshWardrobe } = useWardrobe();
   
   const [material, setMaterial] = useState('');
   const [fabric, setFabric] = useState('');
@@ -79,21 +83,21 @@ export default function AddItemScreen() {
 
   const categories = useMemo(() => getCategoriesForGender(userProfile?.gender || 'female'), [userProfile?.gender]);
 
-  const processClothingMutation = trpc.wardrobe.processClothing.useMutation({
-    onSuccess: (data) => {
-      console.log("[DEBUG] [Add] processClothing Success. Result keys:", Object.keys(data || {}));
-
-      if (!data || typeof data !== 'object') {
-        console.error("[DEBUG] [Add] processClothing returned invalid format:", typeof data);
-        setAnalysisError("AI analysis returned invalid data.");
-        setAnalysisSuccess(false);
-        setIsProcessing(false);
-        return;
-      }
+  const handleProcessImage = async (imageUri: string) => {
+    setIsProcessing(true);
+    setCapturedImage(imageUri);
+    setProcessedImage(imageUri);
+    try {
+      const base64Image = await compressAndConvertToBase64(imageUri);
+      
+      // DIRECT CALL to Firebase Callable Function
+      const functions = getFunctions(app, 'us-central1');
+      const processClothing = httpsCallable(functions, 'processClothingCallable');
+      const result: any = await processClothing({ imgData: base64Image });
+      const data = result.data;
 
       setAnalysisError(null);
       setAnalysisSuccess(true);
-      
       setProcessedImage(data.cleanedImageUrl || data.cleanedImage || capturedImage);
       setDetectedColors(data.color ? [data.color] : []);
       setMaterial(String(data.material || ''));
@@ -110,36 +114,12 @@ export default function AddItemScreen() {
         const returnedCategory = String(data.category).toLowerCase().trim();
         const validCategories = categories.map(c => ({ id: c.id, label: c.label.toLowerCase() }));
         let match = validCategories.find(c => c.id === returnedCategory || c.label === returnedCategory);
-        if (match) {
-          setSelectedCategory(match.id as ClothingCategory);
-        } else {
-            const partialMatch = validCategories.find(c => returnedCategory.includes(c.label));
-            if (partialMatch) setSelectedCategory(partialMatch.id as ClothingCategory);
-        }
+        if (match) setSelectedCategory(match.id as ClothingCategory);
       }
-      setIsProcessing(false);
-    },
-    onError: (error) => {
-      console.error("[DEBUG] [Add] processClothing ERROR:", error.message);
-      console.error("[DEBUG] [Add] Full error object:", JSON.stringify(error));
-      setIsProcessing(false);
-      setAnalysisError(error.message || "AI analysis unavailable.");
-      setAnalysisSuccess(false);
-    },
-  });
-
-  const handleProcessImage = async (imageUri: string) => {
-    console.log("[DEBUG] [Add] handleProcessImage START for:", imageUri.substring(0, 50));
-    setIsProcessing(true);
-    setCapturedImage(imageUri);
-    setProcessedImage(imageUri);
-    try {
-      const base64Image = await compressAndConvertToBase64(imageUri);
-      console.log("[DEBUG] [Add] base64 ready. Starting mutation...");
-      processClothingMutation.mutate({ imageUrl: base64Image, gender: userProfile?.gender || undefined });
     } catch (error: any) {
-      console.error("[DEBUG] [Add] handleProcessImage FAILED:", error.message);
-      setAnalysisError("Failed to prepare image.");
+      console.error("[Add] Direct AI Call Failed:", error.message);
+      setAnalysisError(error.message || "AI Analysis Failed.");
+    } finally {
       setIsProcessing(false);
     }
   };
@@ -169,44 +149,39 @@ export default function AddItemScreen() {
   };
 
   const handleSaveItem = async () => {
-    if (!processedImage || !selectedCategory) return;
+    if (!processedImage || !selectedCategory || !userProfile?.id) return;
     setIsSavingItem(true);
+    
     const newItem = {
       id: Date.now().toString(), imageUri: processedImage, category: selectedCategory,
       colors: detectedColors, addedAt: Date.now(), color: detectedColors[0] || 'unknown',
       style: style || 'casual', confidence: 1.0, material, fabric, pattern, texture,
-      silhouette, patternDescription, materialType, hasPattern, userId: userProfile?.id || ''
+      silhouette, patternDescription, materialType, hasPattern, userId: userProfile.id
     };
+
     try {
-      await addItem(newItem);
-      Alert.alert("Added!", "Item has been added to your wardrobe.", [{ text: "OK", onPress: handleReset }]);
-    } catch (error) {
-      Alert.alert("Save Error", "Failed to save item to wardrobe.");
+      // DIRECT WRITE to Firestore
+      const db = getFirestore(app);
+      const wardrobeRef = doc(db, "wardrobe", userProfile.id);
+      
+      // Ensure document exists
+      const docSnap = await getDoc(wardrobeRef);
+      if (!docSnap.exists()) {
+          await setDoc(wardrobeRef, { items: [newItem] });
+      } else {
+          await updateDoc(wardrobeRef, { items: arrayUnion(newItem) });
+      }
+      
+      await refreshWardrobe();
+      Alert.alert("Added!", "Item has been added to your collection.", [{ text: "OK", onPress: handleReset }]);
+    } catch (error: any) {
+      console.error("[Add] Direct Save Failed:", error.message);
+      Alert.alert("Save Error", "Failed to save item.");
     } finally {
       setIsSavingItem(false);
     }
   };
 
-  const handleStyleMeAfterSave = async () => {
-    if (!processedImage || !selectedCategory) return;
-    setIsSavingItem(true);
-    const newItem = {
-      id: Date.now().toString(), imageUri: processedImage, category: selectedCategory,
-      colors: detectedColors, addedAt: Date.now(), color: detectedColors[0] || 'unknown',
-      style: style || 'casual', confidence: 1.0, material, fabric, pattern, texture,
-      silhouette, patternDescription, materialType, hasPattern, userId: userProfile?.id || ''
-    };
-    try {
-      await addItem(newItem);
-      router.push({ pathname: '/styling', params: { selectedItemId: newItem.id, event: 'casual' } });
-      handleReset();
-    } catch (error) {
-      Alert.alert("Error", "Failed to save item before styling.");
-    } finally {
-      setIsSavingItem(false);
-    }
-  };
-  
   const handleReset = () => {
     setCapturedImage(null); setProcessedImage(null); setSelectedCategory(null);
     setDetectedColors([]); setIsProcessing(false); setAnalysisError(null);
@@ -216,12 +191,8 @@ export default function AddItemScreen() {
   };
 
   const handleToggleStyleMe = () => {
-    if (isStyleMeMode) {
-        setIsStyleMeMode(false);
-    } else {
-        handleReset();
-        setIsStyleMeMode(true);
-    }
+    if (isStyleMeMode) setIsStyleMeMode(false);
+    else { handleReset(); setIsStyleMeMode(true); }
   };
 
   if (showCamera) {
@@ -283,7 +254,7 @@ export default function AddItemScreen() {
             <View style={styles.imageSection}>
               <View style={styles.imagePreviewContainer}>
                 <Image source={{ uri: processedImage || capturedImage }} style={styles.mainPreview} contentFit="contain" />
-                {isProcessing && <View style={styles.processingOverlay}><ActivityIndicator size="large" color={Colors.gold[400]} /><Text style={styles.processingText}>ANALYZING...</Text><TouchableOpacity style={styles.skipButton} onPress={() => setIsProcessing(false)}><Text style={styles.skipButtonText}>SKIP</Text></TouchableOpacity></View>}
+                {isProcessing && <View style={styles.processingOverlay}><ActivityIndicator size="large" color={Colors.gold[400]} /><Text style={styles.processingText}>ANALYZING...</Text></View>}
               </View>
               <TouchableOpacity style={styles.retakeButton} onPress={handleReset}><X size={16} color={Colors.gray[500]} /><Text style={styles.retakeText}>CANCEL</Text></TouchableOpacity>
             </View>
@@ -295,7 +266,6 @@ export default function AddItemScreen() {
               <View style={styles.categoryGrid}>{categories.map((cat) => (<TouchableOpacity key={cat.id} style={[styles.categoryChip, selectedCategory === cat.id && styles.categoryChipSelected]} onPress={() => setSelectedCategory(cat.id as ClothingCategory)}><Text style={styles.categoryIcon}>{cat.icon}</Text><Text style={[styles.categoryChipText, selectedCategory === cat.id && styles.categoryChipTextSelected]}>{cat.label}</Text></TouchableOpacity>))}</View>
             </View>
             <View style={styles.footer}>
-              <TouchableOpacity style={[styles.styleButton, (!processedImage || !selectedCategory || isProcessing || isSavingItem) && styles.saveButtonDisabled]} onPress={handleStyleMeAfterSave} disabled={!processedImage || !selectedCategory || isProcessing || isSavingItem}><LinearGradient colors={(!processedImage || !selectedCategory || isProcessing || isSavingItem) ? [Colors.gray[200], Colors.gray[200]] : [Colors.gold[300], Colors.gold[500]]} style={styles.saveButtonGradient}>{isSavingItem ? <ActivityIndicator color={Colors.richBlack} size="small" /> : <Text style={styles.saveButtonText}>✨ STYLE ME</Text>}</LinearGradient></TouchableOpacity>
               <TouchableOpacity style={[styles.saveButton, (!processedImage || !selectedCategory || isProcessing || isSavingItem) && styles.saveButtonDisabled]} onPress={handleSaveItem} disabled={!processedImage || !selectedCategory || isProcessing || isSavingItem}><View style={styles.saveButtonOutline}>{isSavingItem ? <ActivityIndicator color={Colors.gold[400]} size="small" /> : <Text style={styles.saveButtonOutlineText}>SAVE TO WARDROBE</Text>}</View></TouchableOpacity>
             </View>
           </ScrollView>
