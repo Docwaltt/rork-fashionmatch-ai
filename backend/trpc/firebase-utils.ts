@@ -1,6 +1,7 @@
 import { GoogleAuth } from "google-auth-library";
 import { initializeApp, getApp, getApps, App } from "firebase-admin/app";
 import { credential } from "firebase-admin";
+import axios from "axios";
 
 const auth = new GoogleAuth();
 
@@ -52,29 +53,35 @@ export async function callFirebaseFunction(functionName: string, data: any) {
       const name = (functionName === 'suggestOutfit') ? 'generateOutfitsFn' : functionName;
       url = `https://${name.toLowerCase()}-pfc64ufnsq-uc.a.run.app`;
     } else if (functionName === 'processClothingFn' || functionName === 'analyze') {
-      // Use the base URL to always hit the latest revision
       url = `https://processclothingfn-pfc64ufnsq-uc.a.run.app`;
     } else {
       url = `https://${region}-${projectId}.cloudfunctions.net/${functionName}`;
     }
   }
 
-  console.log(`[DEBUG] [FirebaseUtils] [v2.1] CALLING: ${functionName} at ${url}`);
+  console.log(`[DEBUG] [FirebaseUtils] [v2.3] CALLING: ${functionName} at ${url}`);
 
   try {
+    // 1. Manually fetch the ID token for the target URL
     const client = await auth.getIdTokenClient(url);
-    const response = await client.request({
-      url,
-      method: 'POST',
-      data: { data },
-      timeout: 120000, 
-      responseType: 'text', 
-    });
+    const tokenResponse = await client.getRequestHeaders();
+    const authHeader = tokenResponse.Authorization;
+
+    // 2. Use direct axios call for absolute control over the body
+    const response = await axios.post(url, 
+      { data }, // Wrap in 'data' to match Firebase Callable-like convention
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authHeader,
+        },
+        timeout: 120000,
+        responseType: 'text',
+      }
+    );
 
     const rawText = String(response.data);
-    
-    // Log the first few characters to detect 'null' or other prefixes
-    console.log(`[DEBUG] [FirebaseUtils] RAW START: "${rawText.substring(0, 10)}"`);
+    console.log(`[DEBUG] [FirebaseUtils] RAW START: "${rawText.substring(0, 15)}"`);
 
     let result: any;
     
@@ -91,20 +98,22 @@ export async function callFirebaseFunction(functionName: string, data: any) {
         throw parseError;
       }
     } else {
-      // Fallback for non-braced responses or errors
       result = JSON.parse(rawText);
     }
 
-    // Unwrap Firebase v2 'result' wrapper
     if (result && result.result !== undefined) {
       result = result.result;
     }
 
     if (result === null || result === undefined) return {};
     
+    console.log(`[DEBUG] [FirebaseUtils] SUCCESS: ${functionName}. Keys:`, Object.keys(result));
     return result;
   } catch (error: any) {
     console.error(`[DEBUG] [FirebaseUtils] FAILED function ${functionName}:`, error.message);
+    if (error.response && error.response.data) {
+        console.error(`[DEBUG] [FirebaseUtils] RAW ERROR BODY:`, String(error.response.data).substring(0, 200));
+    }
     throw error;
   }
 }
