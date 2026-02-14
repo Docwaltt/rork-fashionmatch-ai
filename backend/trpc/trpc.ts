@@ -1,12 +1,14 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { Context } from "./create-context";
-import superjson from "superjson";
 import { getAuth } from "firebase-admin/auth";
 import { getFirebaseApp } from "./firebase-utils";
 
-const t = initTRPC.context<Context>().create({
-  transformer: superjson,
-});
+/**
+ * Standardized tRPC initialization.
+ * Removed superjson transformer to ensure 100% compatibility with the Hono/fetch adapter
+ * and consistent behavior across mobile and web platforms.
+ */
+const t = initTRPC.context<Context>().create();
 
 export const router = t.router;
 export const publicProcedure = t.procedure;
@@ -15,9 +17,6 @@ export const authedProcedure = t.procedure.use(async ({ ctx, next }) => {
   const authHeader = ctx.req.headers.get("Authorization");
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    // For local development or if auth is managed elsewhere, we might want a fallback
-    // But for production, this should be strict.
-    // Given the wardrobe.ts usage of ctx.user.uid, we MUST have a user.
     throw new TRPCError({ code: "UNAUTHORIZED", message: "Missing or invalid authorization header" });
   }
 

@@ -1,11 +1,12 @@
 import { createTRPCReact } from "@trpc/react-query";
 import type { AppRouter } from "@/backend/trpc/app-router";
-import superjson from "superjson";
 
 /**
  * tRPC React Query client configuration.
- * Using superjson transformer to align with the backend's configuration in trpc.ts.
+ * Global synchronization on standard JSON for 100% reliability across Hono, 
+ * fetch adapters, and Cloud Functions.
  */
 export const trpc = createTRPCReact<AppRouter>();
 
-export const transformer = superjson;
+// Transformer is now undefined (standard JSON) project-wide.
+export const transformer = undefined;
