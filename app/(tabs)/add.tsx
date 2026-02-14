@@ -65,7 +65,6 @@ export default function AddItemScreen() {
   const [isSavingItem, setIsSavingItem] = useState(false);
   const { addItem } = useWardrobe();
   
-  // State for all analyzable fields
   const [material, setMaterial] = useState('');
   const [fabric, setFabric] = useState('');
   const [pattern, setPattern] = useState('');
@@ -80,13 +79,13 @@ export default function AddItemScreen() {
 
   const categories = useMemo(() => getCategoriesForGender(userProfile?.gender || 'female'), [userProfile?.gender]);
 
-  const analyzeImageMutation = trpc.wardrobe.analyze.useMutation({
+  const processClothingMutation = trpc.wardrobe.processClothing.useMutation({
     onSuccess: (data) => {
-      console.log("[Add] AI Analysis Success. Keys received:", Object.keys(data || {}));
+      console.log("[DEBUG] [Add] processClothing Success. Result keys:", Object.keys(data || {}));
 
       if (!data || typeof data !== 'object') {
-        console.error("[Add] AI analysis returned invalid data format:", typeof data);
-        setAnalysisError("AI analysis returned invalid data. Please select manually.");
+        console.error("[DEBUG] [Add] processClothing returned invalid format:", typeof data);
+        setAnalysisError("AI analysis returned invalid data.");
         setAnalysisSuccess(false);
         setIsProcessing(false);
         return;
@@ -95,8 +94,6 @@ export default function AddItemScreen() {
       setAnalysisError(null);
       setAnalysisSuccess(true);
       
-      // Update UI with all details from the backend
-      // Fallback to cleanedImage or capturedImage if cleanedImageUrl is missing
       setProcessedImage(data.cleanedImageUrl || data.cleanedImage || capturedImage);
       setDetectedColors(data.color ? [data.color] : []);
       setMaterial(String(data.material || ''));
@@ -109,43 +106,40 @@ export default function AddItemScreen() {
       setMaterialType(String(data.materialType || ''));
       setHasPattern(!!data.hasPattern);
 
-      // Robust category matching
       if (data.category) {
         const returnedCategory = String(data.category).toLowerCase().trim();
         const validCategories = categories.map(c => ({ id: c.id, label: c.label.toLowerCase() }));
-        
         let match = validCategories.find(c => c.id === returnedCategory || c.label === returnedCategory);
-        
         if (match) {
           setSelectedCategory(match.id as ClothingCategory);
         } else {
-            console.warn(`AI returned category "${returnedCategory}" which has no direct match.`);
-            // Fallback for partial matches (e.g., "short sleeve shirt" -> "shirt")
             const partialMatch = validCategories.find(c => returnedCategory.includes(c.label));
-            if (partialMatch) {
-                setSelectedCategory(partialMatch.id as ClothingCategory);
-            }
+            if (partialMatch) setSelectedCategory(partialMatch.id as ClothingCategory);
         }
       }
       setIsProcessing(false);
     },
     onError: (error) => {
-      console.error("[Add] AI Analysis Error:", error);
+      console.error("[DEBUG] [Add] processClothing ERROR:", error.message);
+      console.error("[DEBUG] [Add] Full error object:", JSON.stringify(error));
       setIsProcessing(false);
-      setAnalysisError(error.message || "AI analysis unavailable. Please select category manually.");
+      setAnalysisError(error.message || "AI analysis unavailable.");
       setAnalysisSuccess(false);
     },
   });
 
   const handleProcessImage = async (imageUri: string) => {
+    console.log("[DEBUG] [Add] handleProcessImage START for:", imageUri.substring(0, 50));
     setIsProcessing(true);
     setCapturedImage(imageUri);
     setProcessedImage(imageUri);
     try {
       const base64Image = await compressAndConvertToBase64(imageUri);
-      analyzeImageMutation.mutate({ imageUrl: base64Image, gender: userProfile?.gender || undefined });
+      console.log("[DEBUG] [Add] base64 ready. Starting mutation...");
+      processClothingMutation.mutate({ imageUrl: base64Image, gender: userProfile?.gender || undefined });
     } catch (error: any) {
-      setAnalysisError("Failed to prepare image. Please select category manually.");
+      console.error("[DEBUG] [Add] handleProcessImage FAILED:", error.message);
+      setAnalysisError("Failed to prepare image.");
       setIsProcessing(false);
     }
   };

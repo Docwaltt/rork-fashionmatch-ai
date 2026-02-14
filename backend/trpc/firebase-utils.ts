@@ -58,7 +58,7 @@ export async function callFirebaseFunction(functionName: string, data: any) {
     }
   }
 
-  console.log(`[FirebaseUtils] Calling function: ${functionName} at ${url}`);
+  console.log(`[DEBUG] [FirebaseUtils] START calling function: ${functionName} at ${url}`);
 
   try {
     const client = await auth.getIdTokenClient(url);
@@ -67,12 +67,36 @@ export async function callFirebaseFunction(functionName: string, data: any) {
       method: 'POST',
       data: { data },
       timeout: 120000, 
-      responseType: 'json', // Native JSON parsing is the definitive fix for the position 4 error
+      responseType: 'text', // Back to text to see EXACTLY what we are getting
     });
 
-    let result = response.data;
+    const rawData = response.data;
+    console.log(`[DEBUG] [FirebaseUtils] RAW response from ${functionName}:`, String(rawData).substring(0, 500));
 
-    // Handle common Firebase/Genkit response wrapping
+    let result: any;
+    try {
+        result = JSON.parse(String(rawData));
+    } catch (parseError: any) {
+        console.error(`[DEBUG] [FirebaseUtils] FAILED to parse JSON from ${functionName}. Error: ${parseError.message}`);
+        
+        // Final, robust recovery attempt: find first { and last }
+        const text = String(rawData);
+        const start = text.indexOf('{');
+        const end = text.lastIndexOf('}');
+        if (start !== -1 && end !== -1) {
+            const potentialJson = text.substring(start, end + 1);
+            try {
+                result = JSON.parse(potentialJson);
+                console.log(`[DEBUG] [FirebaseUtils] RECOVERED JSON successfully.`);
+            } catch (recoveryError) {
+                console.error(`[DEBUG] [FirebaseUtils] RECOVERY FAILED.`);
+                throw parseError;
+            }
+        } else {
+            throw parseError;
+        }
+    }
+
     if (result && result.result !== undefined) {
       result = result.result;
     } else if (result && result.data !== undefined && !result.category && !Array.isArray(result)) {
@@ -81,9 +105,13 @@ export async function callFirebaseFunction(functionName: string, data: any) {
 
     if (result === null || result === undefined) return {};
     
+    console.log(`[DEBUG] [FirebaseUtils] SUCCESS calling ${functionName}. Result keys:`, Object.keys(result));
     return result;
   } catch (error: any) {
-    console.error(`[FirebaseUtils] Error calling function ${functionName}:`, error.message);
+    console.error(`[DEBUG] [FirebaseUtils] ERROR calling function ${functionName}:`, error.message);
+    if (error.response && error.response.data) {
+        console.error(`[DEBUG] [FirebaseUtils] ERROR details:`, String(error.response.data).substring(0, 500));
+    }
     throw error;
   }
 }
