@@ -17,7 +17,7 @@ async function removeBackgroundWithClipdrop(imageBuffer: Buffer): Promise<Buffer
   formData.append('image_file', new Blob([new Uint8Array(imageBuffer)], { type: 'image/jpeg' }), 'image.jpg');
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout
+  const timeoutId = setTimeout(() => controller.abort(), 30000); 
 
   const response = await fetch('https://clipdrop-api.co/remove-background/v1', {
     method: 'POST',
@@ -40,20 +40,16 @@ async function removeBackgroundWithClipdrop(imageBuffer: Buffer): Promise<Buffer
 async function uploadToStorage(buffer: Buffer, contentType: string): Promise<string> {
     let bucket = getStorage().bucket();
     if (!bucket.name) {
-        console.warn("LOG: Default bucket name is empty. Fallback to project-based bucket.");
         const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID;
         if (projectId) {
             bucket = getStorage().bucket(`${projectId}.appspot.com`);
-        } else {
-            console.error("LOG: Project ID not found in environment.");
         }
     }
 
     if (!bucket.name) {
-        throw new Error("Could not determine storage bucket name. Ensure GOOGLE_CLOUD_PROJECT or EXPO_PUBLIC_FIREBASE_PROJECT_ID is set.");
+        throw new Error("Could not determine storage bucket name.");
     }
 
-    console.log(`LOG: Uploading to bucket: ${bucket.name}`);
     const fileName = `temp_cleaned/${randomUUID()}.png`;
     const file = bucket.file(fileName);
     const downloadToken = randomUUID();
@@ -107,6 +103,7 @@ export const processClothing = ai.defineFlow(
     }
 
     try {
+      // Switching back to Gemini 3 as per your requirement
       console.log(`LOG: Sending to Gemini with model gemini-3-flash-preview...`);
       
       const response = await ai.generate({
@@ -135,11 +132,10 @@ export const processClothing = ai.defineFlow(
           cleanedImageUrl: cleanedImageUrl,
           isBackgroundRemoved
       };
-      console.log(`LOG: Returning final response keys: ${Object.keys(finalResponse)}`);
       return finalResponse;
 
     } catch (geminiError: any) {
-      console.error("LOG: Gemini analysis failed:", geminiError.message, geminiError.stack);
+      console.error("LOG: Gemini analysis failed:", geminiError.message);
       return { error: `AI Analysis Failed: ${geminiError.message}`, isBackgroundRemoved, cleanedImage: cleanedImageUrl };
     }
   }

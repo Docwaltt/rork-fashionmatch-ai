@@ -20,6 +20,8 @@ export const ClothingSchema = z.object({
   patternDescription: z.string().optional().describe('Detailed description of the pattern'),
 });
 
+// Explicitly pass the API key to the plugin for reliable initialization.
+// The key is securely retrieved from the environment secret during function execution.
 export const ai = genkit({ 
-  plugins: [googleAI()],
+  plugins: [googleAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY })],
 });

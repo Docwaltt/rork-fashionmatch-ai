@@ -96,11 +96,7 @@ export const generateOutfits = ai.defineFlow(
 
         const suggestions = response.output || [];
         console.log(`[generateOutfits] Received ${suggestions.length} suggestions from AI.`);
-        if (suggestions.length === 0) {
-            console.warn('[generateOutfits] AI returned 0 suggestions. Response:', JSON.stringify(response, null, 2));
-        }
-
-        // Image generation is now enabled
+        
         for (const suggestion of suggestions) {
            try {
              const suggestionItems = wardrobe.filter(item => suggestion.items.includes(item.id as string));
@@ -115,7 +111,7 @@ export const generateOutfits = ai.defineFlow(
         return suggestions;
 
     } catch(error: any) {
-        console.error('[generateOutfits] CRITICAL ERROR during ai.generate call:', error.message, error.stack);
+        console.error('[generateOutfits] CRITICAL ERROR during ai.generate call:', error.message);
         return []; 
     }
   }

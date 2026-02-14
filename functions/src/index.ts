@@ -15,22 +15,20 @@ const clipdropApiKey = defineSecret('CLIPDROP_API_KEY');
 const googleServiceAccountEmail = defineSecret('GOOGLE_SERVICE_ACCOUNT_EMAIL');
 const googlePrivateKey = defineSecret('GOOGLE_PRIVATE_KEY');
 
+// Forced redeploy to pick up new secret version 5
 // Export generateOutfits as an HTTP function for more control
 export const generateOutfitsFn = onRequest({
   memory: '2GiB',
-  timeoutSeconds: 540, // Increased timeout
+  timeoutSeconds: 540, 
   region: 'us-central1',
   invoker: 'public',
-  cors: true, // Enable CORS for direct client calls
+  cors: true, 
   secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey],
 }, async (req: Request, res: Response) => {
   try {
-    // Standardize input extraction: tRPC sends { data }
     const input = req.body.data || req.body;
-    
     console.log("Starting generateOutfits flow...");
     const result = await generateOutfits.run(input);
-    
     res.status(200).json({ result }); 
   } catch (error: any) {
     console.error("generateOutfitsFn error:", error);
@@ -45,11 +43,10 @@ export const processClothingFn = onRequest({
   timeoutSeconds: 300,
   region: 'us-central1',
   cors: true,
-  invoker: 'public', // Allow unauthenticated access
-  secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey], // Bind secrets
+  invoker: 'public', 
+  secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey], 
 }, async (req: Request, res: Response) => {
   try {
-    // Standardize input extraction: tRPC sends { data } which contains { imgData, gender }
     const input = req.body.data || req.body;
 
     if (!input || !input.imgData) {
@@ -58,12 +55,8 @@ export const processClothingFn = onRequest({
       return;
     }
 
-    // Invoke the Genkit flow directly
     console.log("Starting processClothing flow...");
     const result = await processClothing.run(input);
-    
-    // Always wrap in a 'result' key for consistency with Firebase Callable patterns
-    // and ensuring valid JSON is returned to the tRPC client.
     res.status(200).json({ result });
   } catch (error: any) {
     console.error("Error in processClothingFn execution:", error);
