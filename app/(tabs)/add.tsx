@@ -95,26 +95,42 @@ export default function AddItemScreen() {
       const result: any = await processClothing({ imgData: base64Image });
       const data = result.data;
 
+      if (!data || data.error) {
+        throw new Error(data?.error || "AI failed to analyze image.");
+      }
+
       setAnalysisError(null);
       setAnalysisSuccess(true);
       
-      // Use the storage URL provided by the AI flow
+      // THE FIX: Correctly map all AI-extracted fields to component state
+      // Always prioritize the storage URL for the processed image
       setProcessedImage(data.cleanedImageUrl || data.cleanedImage || capturedImage);
       setDetectedColors(data.color ? [data.color] : []);
-      setMaterial(String(data.material || ''));
-      setFabric(String(data.fabric || ''));
-      setPattern(String(data.pattern || ''));
-      setStyle(String(data.style || ''));
-      setTexture(String(data.texture || ''));
-      setSilhouette(String(data.silhouette || ''));
-      setPatternDescription(String(data.patternDescription || ''));
-      setMaterialType(String(data.materialType || ''));
+      
+      // Defensive mapping to avoid "undefined" strings in inputs
+      setMaterial(data.material || '');
+      setFabric(data.fabric || '');
+      setPattern(data.pattern || '');
+      setStyle(data.style || '');
+      setTexture(data.texture || '');
+      setSilhouette(data.silhouette || '');
+      setPatternDescription(data.patternDescription || '');
+      setMaterialType(data.materialType || '');
       setHasPattern(!!data.hasPattern);
 
+      // Improved category matching logic
       if (data.category) {
         const returnedCategory = String(data.category).toLowerCase().trim();
         const validCategories = categories.map(c => ({ id: c.id, label: c.label.toLowerCase() }));
+        
+        // 1. Direct ID or Label match
         let match = validCategories.find(c => c.id === returnedCategory || c.label === returnedCategory);
+        
+        // 2. Partial match fallback (e.g., "blue denim jeans" -> "jeans")
+        if (!match) {
+            match = validCategories.find(c => returnedCategory.includes(c.id) || returnedCategory.includes(c.label));
+        }
+
         if (match) setSelectedCategory(match.id as ClothingCategory);
       }
     } catch (error: any) {
@@ -153,7 +169,6 @@ export default function AddItemScreen() {
     if (!processedImage || !selectedCategory) return;
     setIsSavingItem(true);
     
-    // NEW ITEM OBJECT: Perfectly aligned with ClothingSchema and ClothingItem types
     const newItem = {
       id: Date.now().toString(), 
       imageUri: processedImage, 
@@ -174,7 +189,6 @@ export default function AddItemScreen() {
     };
 
     try {
-      // Use standardized context function which handles Firestore, Storage, and UI Refresh
       await addItem(newItem);
       Alert.alert("Added!", "Item has been added to your collection.", [{ text: "OK", onPress: handleReset }]);
     } catch (error: any) {
