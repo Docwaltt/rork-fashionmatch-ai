@@ -13,7 +13,11 @@ import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { trpc } from "@/lib/trpc";
+
+// Firebase Direct Imports
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { app } from '@/lib/firebase';
+
 import { useWardrobe } from "@/contexts/WardrobeContext";
 import Colors from "@/constants/colors";
 import { ArrowLeft, Sparkles, WandSparkles } from "lucide-react-native";
@@ -22,6 +26,7 @@ import { ClothingItem } from "@/types/wardrobe";
 interface OutfitSuggestion {
   title: string;
   description: string;
+  reason?: string;
   items: string[];
   generatedImageUrl?: string;
 }
@@ -36,13 +41,10 @@ export default function StylingScreen() {
   }>();
 
   const [suggestions, setSuggestions] = useState<OutfitSuggestion[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const stylingWardrobe = useMemo(() => {
-    // Guard clause: Wait until the wardrobe is loaded to prevent crashes.
-    if (!items) {
-      return [];
-    }
-
+    if (!items) return [];
     let itemsToStyle: ClothingItem[] = [];
 
     if (selectedItemIdsJSON) {
@@ -62,45 +64,50 @@ export default function StylingScreen() {
     return itemsToStyle;
   }, [items, selectedItemId, selectedItemIdsJSON]);
 
-  const suggestOutfitMutation = trpc.wardrobe.suggestOutfit.useMutation({
-    onSuccess: (data) => {
-      const newSuggestions = (data || []) as OutfitSuggestion[];
-      setSuggestions(newSuggestions);
-    },
-    onError: (error) => {
-      console.error("Suggest outfit mutation error:", error);
-      Alert.alert(
-        "Generation Failed",
-        "Could not generate outfit suggestions. Please try again later."
-      );
-    },
-  });
-
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (stylingWardrobe.length < 2) {
       Alert.alert(
         "Not Enough Clothing",
-        "You need at least two items to generate an outfit. Please select more items from your wardrobe."
+        "You need at least two items to generate an outfit."
       );
       return;
     }
 
-    suggestOutfitMutation.mutate({
-      wardrobe: stylingWardrobe,
-      numSuggestions: 2,
-      event: event || 'casual',
-    });
+    setIsGenerating(true);
+    try {
+      // DIRECT CALL to Firebase Callable Function
+      const functions = getFunctions(app, 'us-central1');
+      const generateOutfits = httpsCallable(functions, 'generateOutfitsCallable');
+      
+      // AI needs the metadata, but we strip the large base64 strings to keep the request fast
+      const cleanWardrobe = stylingWardrobe.map(item => {
+        const { imageUri, cleanedImage, ...rest } = item;
+        return rest;
+      });
+
+      const result: any = await generateOutfits({
+        wardrobe: stylingWardrobe, // Pass original if AI needs to generate images
+        numSuggestions: 2,
+        event: event || 'casual',
+      });
+
+      const data = result.data?.result || result.data;
+      setSuggestions(Array.isArray(data) ? data : []);
+    } catch (error: any) {
+      console.error("[Styling] Generation Failed:", error.message);
+      Alert.alert("Generation Failed", "Could not generate outfit suggestions.");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   useEffect(() => {
-    // Trigger generation only when the wardrobe is ready and filtered.
-    if (stylingWardrobe && stylingWardrobe.length > 0) {
+    if (stylingWardrobe && stylingWardrobe.length >= 2 && suggestions.length === 0) {
       handleGenerate();
     }
   }, [stylingWardrobe]);
 
   const renderSuggestionCard = (suggestion: OutfitSuggestion, index: number) => {
-    // Guard against wardrobe being unavailable during render
     if (!items) return null;
 
     const outfitItems = (suggestion.items || [])
@@ -111,12 +118,16 @@ export default function StylingScreen() {
       <View key={index} style={styles.suggestionCard}>
         <Text style={styles.suggestionTitle}>{suggestion.title}</Text>
         <Text style={styles.suggestionDescription}>{suggestion.description}</Text>
+        
+        {suggestion.reason && (
+            <Text style={styles.suggestionReason}>{suggestion.reason}</Text>
+        )}
 
         {suggestion.generatedImageUrl ? (
           <Image
             source={{ uri: suggestion.generatedImageUrl }}
             style={styles.outfitImage}
-            contentFit="cover"
+            contentFit="contain"
           />
         ) : (
           <View style={styles.itemImageGrid}>
@@ -125,7 +136,7 @@ export default function StylingScreen() {
                 key={item.id}
                 source={{ uri: item.imageUri }}
                 style={styles.itemImage}
-                contentFit="cover"
+                contentFit="contain"
               />
             ))}
           </View>
@@ -134,11 +145,9 @@ export default function StylingScreen() {
     );
   };
 
-  const isLoading = suggestOutfitMutation.isPending;
+  const isLoading = isGenerating;
   const hasSuggestions = suggestions.length > 0;
-
-  // Special handling for the initial loading state before we even try to generate
-  const isWardrobeLoading = !stylingWardrobe || (stylingWardrobe.length === 0 && !hasSuggestions);
+  const isWardrobeLoading = !items || (items.length === 0 && !hasSuggestions);
 
   return (
     <View style={styles.container}>
@@ -152,7 +161,7 @@ export default function StylingScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           {(isLoading || isWardrobeLoading) && (
             <View style={styles.centered}>
               <ActivityIndicator size="large" color={Colors.gold[400]} />
@@ -166,7 +175,7 @@ export default function StylingScreen() {
               <WandSparkles size={48} color={Colors.gray[600]} strokeWidth={1} />
               <Text style={styles.emptyText}>No Suggestions Yet</Text>
               <Text style={styles.emptySubtext}>
-                {"We couldn't generate any outfits. This can happen if there aren't enough items, or the selected items don't make a good combo."}
+                {"We couldn't generate any outfits. Try selecting different items."}
               </Text>
               <TouchableOpacity style={styles.retryButton} onPress={handleGenerate}>
                 <Text style={styles.retryButtonText}>✨ TRY AGAIN</Text>
@@ -196,19 +205,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.gray[800],
+    borderBottomColor: Colors.gray[100],
   },
   backButton: { padding: 8 },
   headerTitle: {
     color: Colors.white,
     fontSize: 16,
-    fontWeight: "bold",
-    letterSpacing: 1.5,
+    fontWeight: "600",
+    letterSpacing: 2,
+    textTransform: 'uppercase',
   },
-  content: { padding: 16, paddingBottom: 50 },
+  content: { padding: 24, paddingBottom: 60 },
   centered: {
     flex: 1,
     justifyContent: "center",
@@ -217,70 +227,84 @@ const styles = StyleSheet.create({
     minHeight: 500,
   },
   loadingText: {
-    marginTop: 16,
+    marginTop: 20,
     color: Colors.white,
     fontSize: 18,
-    fontWeight: "bold",
+    fontWeight: "300",
     textAlign: "center",
+    letterSpacing: 1,
   },
   loadingSubtext: {
     marginTop: 8,
-    color: Colors.gray[400],
+    color: Colors.gray[500],
     fontSize: 14,
     textAlign: "center",
+    letterSpacing: 0.5,
   },
   emptyText: {
     marginTop: 24,
     color: Colors.white,
     fontSize: 20,
-    fontWeight: "bold",
+    fontWeight: "300",
+    letterSpacing: 2,
   },
   emptySubtext: {
     marginTop: 12,
     color: Colors.gray[500],
     fontSize: 14,
     textAlign: "center",
-    lineHeight: 20,
+    lineHeight: 22,
+    letterSpacing: 0.5,
   },
   retryButton: {
     marginTop: 32,
     backgroundColor: Colors.gold[400],
-    paddingVertical: 14,
-    paddingHorizontal: 32,
+    paddingVertical: 16,
+    paddingHorizontal: 40,
   },
   retryButtonText: {
     color: Colors.richBlack,
     fontSize: 14,
-    fontWeight: "bold",
-    letterSpacing: 1,
+    fontWeight: "700",
+    letterSpacing: 1.5,
   },
   subHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    marginBottom: 24,
+    marginBottom: 32,
   },
-  subHeaderText: { color: Colors.gold[300], fontSize: 16, fontWeight: "500" },
+  subHeaderText: { color: Colors.gold[400], fontSize: 12, fontWeight: "600", letterSpacing: 1, textTransform: 'uppercase' },
   suggestionCard: {
     backgroundColor: Colors.card,
-    padding: 16,
-    marginBottom: 24,
+    padding: 24,
+    marginBottom: 32,
     borderWidth: 1,
     borderColor: Colors.gray[100],
   },
   suggestionTitle: {
     color: Colors.white,
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 8,
+    fontSize: 20,
+    fontWeight: "300",
+    marginBottom: 12,
+    letterSpacing: 1,
   },
   suggestionDescription: {
     color: Colors.gray[400],
     fontSize: 14,
     marginBottom: 16,
-    lineHeight: 20,
+    lineHeight: 22,
+    letterSpacing: 0.5,
   },
-  itemImageGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  itemImage: { width: 80, height: 80 },
-  outfitImage: { width: "100%", height: 300 },
+  suggestionReason: {
+    color: Colors.white,
+    fontSize: 13,
+    fontStyle: 'italic',
+    marginBottom: 24,
+    lineHeight: 20,
+    opacity: 0.8,
+  },
+  itemImageGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  itemImage: { width: 100, height: 100, backgroundColor: Colors.gray[50], borderWidth: 1, borderColor: Colors.gray[100] },
+  outfitImage: { width: "100%", height: 350, backgroundColor: Colors.gray[50], borderWidth: 1, borderColor: Colors.gray[100] },
 });

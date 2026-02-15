@@ -35,8 +35,9 @@ export const generateOutfitImage = ai.defineFlow(
         throw new Error("Could not generate outfit image because some items were missing image data.");
     }
 
+    // Using Gemini 3 Pro Image Preview for merging/generating the outfit image
     const response = await ai.generate({
-        model: googleAI.model('gemini-3-flash-preview'),
+        model: googleAI.model('gemini-3-pro-image-preview'),
         prompt: [
             { text: "Create a realistic flat lay image of a complete outfit, arranging the provided clothing items logically from top to bottom. Ensure the final image is stylish and visually appealing, on a clean, neutral background." },
             ...imageParts,
@@ -83,6 +84,7 @@ export const generateOutfits = ai.defineFlow(
     console.log('[generateOutfits] Prompt text created. Length:', promptText.length);
 
     try {
+        // Using Gemini 3 Pro Preview for logical suggestions and reasoning
         const response = await ai.generate({
           model: googleAI.model('gemini-3-pro-preview'),
           prompt: [
