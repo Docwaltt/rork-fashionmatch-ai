@@ -96,16 +96,12 @@ export default function AddItemScreen() {
       const processClothing = httpsCallable(functions, 'processClothingCallable');
       const result: any = await processClothing({ imgData: base64Image });
       
-      // THE FIX: Unwrapping the data from the direct Firebase Callable response
       const data = result.data?.result || result.data;
 
       if (!data || data.error) {
         throw new Error(data?.error || "AI failed to analyze image.");
       }
 
-      console.log("[Add] AI Analysis Success. Received data:", Object.keys(data));
-
-      // UPDATE UI STATE WITH AI DATA
       setProcessedImage(data.cleanedImageUrl || data.cleanedImage || capturedImage);
       setDetectedColors(data.color ? [data.color] : []);
       setMaterial(data.material || '');
@@ -118,7 +114,6 @@ export default function AddItemScreen() {
       setMaterialType(data.materialType || '');
       setHasPattern(!!data.hasPattern);
 
-      // CATEGORY MATCHING
       if (data.category) {
         const returnedCategory = String(data.category).toLowerCase().trim();
         const validCategories = categories.map(c => ({ id: c.id, label: c.label.toLowerCase() }));
@@ -193,6 +188,41 @@ export default function AddItemScreen() {
     } catch (error: any) {
       console.error("[Add] Direct Save Failed:", error.message);
       Alert.alert("Save Error", "Failed to save item.");
+    } finally {
+      setIsSavingItem(false);
+    }
+  };
+
+  const handleStyleMeAfterSave = async () => {
+    if (!processedImage || !selectedCategory) return;
+    setIsSavingItem(true);
+    
+    const newItem = {
+      id: Date.now().toString(), 
+      imageUri: processedImage, 
+      category: selectedCategory,
+      colors: detectedColors, 
+      addedAt: Date.now(), 
+      color: detectedColors[0] || 'unknown',
+      style: style || 'casual', 
+      confidence: 1.0, 
+      material, 
+      fabric, 
+      pattern, 
+      texture,
+      silhouette, 
+      patternDescription, 
+      materialType, 
+      hasPattern
+    };
+
+    try {
+      await addItem(newItem);
+      router.push({ pathname: '/styling', params: { selectedItemId: newItem.id, event: 'casual' } });
+      handleReset();
+    } catch (error) {
+      console.error("[Add] Style Me Save Failed:", error.message);
+      Alert.alert("Error", "Failed to save item before styling.");
     } finally {
       setIsSavingItem(false);
     }
@@ -282,7 +312,28 @@ export default function AddItemScreen() {
               <View style={styles.categoryGrid}>{categories.map((cat) => (<TouchableOpacity key={cat.id} style={[styles.categoryChip, selectedCategory === cat.id && styles.categoryChipSelected]} onPress={() => setSelectedCategory(cat.id as ClothingCategory)}><Text style={styles.categoryIcon}>{cat.icon}</Text><Text style={[styles.categoryChipText, selectedCategory === cat.id && styles.categoryChipTextSelected]}>{cat.label}</Text></TouchableOpacity>))}</View>
             </View>
             <View style={styles.footer}>
-              <TouchableOpacity style={[styles.saveButton, (!processedImage || !selectedCategory || isProcessing || isSavingItem) && styles.saveButtonDisabled]} onPress={handleSaveItem} disabled={!processedImage || !selectedCategory || isProcessing || isSavingItem}><View style={styles.saveButtonOutline}>{isSavingItem ? <ActivityIndicator color={Colors.gold[400]} size="small" /> : <Text style={styles.saveButtonOutlineText}>SAVE TO WARDROBE</Text>}</View></TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.styleButton, (!processedImage || !selectedCategory || isProcessing || isSavingItem) && styles.saveButtonDisabled]} 
+                onPress={handleStyleMeAfterSave} 
+                disabled={!processedImage || !selectedCategory || isProcessing || isSavingItem}
+              >
+                <LinearGradient 
+                  colors={(!processedImage || !selectedCategory || isProcessing || isSavingItem) ? [Colors.gray[200], Colors.gray[200]] : [Colors.gold[300], Colors.gold[500]]} 
+                  style={styles.saveButtonGradient}
+                >
+                  {isSavingItem ? <ActivityIndicator color={Colors.richBlack} size="small" /> : <Text style={styles.saveButtonText}>✨ STYLE ME</Text>}
+                </LinearGradient>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.saveButton, (!processedImage || !selectedCategory || isProcessing || isSavingItem) && styles.saveButtonDisabled]} 
+                onPress={handleSaveItem} 
+                disabled={!processedImage || !selectedCategory || isProcessing || isSavingItem}
+              >
+                <View style={styles.saveButtonOutline}>
+                  {isSavingItem ? <ActivityIndicator color={Colors.gold[400]} size="small" /> : <Text style={styles.saveButtonOutlineText}>SAVE TO WARDROBE</Text>}
+                </View>
+              </TouchableOpacity>
             </View>
           </ScrollView>
         )}
