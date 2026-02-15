@@ -7,7 +7,7 @@ export declare const ClothingSchema: z.ZodObject<{
     style: z.ZodString;
     confidence: z.ZodNumber;
     cleanedImage: z.ZodOptional<z.ZodString>;
-    isBackgroundRemoved: z.ZodBoolean;
+    isBackgroundRemoved: z.ZodOptional<z.ZodBoolean>;
     material: z.ZodOptional<z.ZodString>;
     fabric: z.ZodOptional<z.ZodString>;
     pattern: z.ZodOptional<z.ZodString>;
@@ -21,10 +21,10 @@ export declare const ClothingSchema: z.ZodObject<{
     color: string;
     style: string;
     confidence: number;
-    isBackgroundRemoved: boolean;
     id?: string | undefined;
     imageUri?: string | undefined;
     cleanedImage?: string | undefined;
+    isBackgroundRemoved?: boolean | undefined;
     material?: string | undefined;
     fabric?: string | undefined;
     pattern?: string | undefined;
@@ -38,10 +38,10 @@ export declare const ClothingSchema: z.ZodObject<{
     color: string;
     style: string;
     confidence: number;
-    isBackgroundRemoved: boolean;
     id?: string | undefined;
     imageUri?: string | undefined;
     cleanedImage?: string | undefined;
+    isBackgroundRemoved?: boolean | undefined;
     material?: string | undefined;
     fabric?: string | undefined;
     pattern?: string | undefined;

@@ -9,7 +9,7 @@ export const ClothingSchema = z.object({
   style: z.string().describe('Fashion style (e.g., Casual, Formal, Vintage, Streetwear)'),
   confidence: z.number().describe('AI certainty score from 0 to 1'),
   cleanedImage: z.string().optional().describe('Base64 string or URL of the image with background removed'),
-  isBackgroundRemoved: z.boolean().describe('Whether the background removal process was successful'),
+  isBackgroundRemoved: z.boolean().optional().describe('Whether the background removal process was successful'),
   material: z.string().optional().describe('The material of the item (e.g., Denim, Leather, Wool)'),
   fabric: z.string().optional().describe('Fabric texture (e.g., knit, woven, silk, cotton)'),
   pattern: z.string().optional().describe('Pattern type (e.g., Solid, Striped, Plaid)'),
@@ -20,8 +20,6 @@ export const ClothingSchema = z.object({
   patternDescription: z.string().optional().describe('Detailed description of the pattern'),
 });
 
-// Explicitly pass the API key to the plugin for reliable initialization.
-// The key is securely retrieved from the environment secret during function execution.
 export const ai = genkit({ 
   plugins: [googleAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY })],
 });
