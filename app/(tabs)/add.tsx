@@ -86,28 +86,28 @@ export default function AddItemScreen() {
     setIsProcessing(true);
     setCapturedImage(imageUri);
     setProcessedImage(imageUri);
+    setAnalysisSuccess(false);
+    setAnalysisError(null);
+
     try {
       const base64Image = await compressAndConvertToBase64(imageUri);
       
-      // CALL Callable Cloud Function directly
       const functions = getFunctions(app, 'us-central1');
       const processClothing = httpsCallable(functions, 'processClothingCallable');
       const result: any = await processClothing({ imgData: base64Image });
-      const data = result.data;
+      
+      // THE FIX: Unwrapping the data from the direct Firebase Callable response
+      const data = result.data?.result || result.data;
 
       if (!data || data.error) {
         throw new Error(data?.error || "AI failed to analyze image.");
       }
 
-      setAnalysisError(null);
-      setAnalysisSuccess(true);
-      
-      // THE FIX: Correctly map all AI-extracted fields to component state
-      // Always prioritize the storage URL for the processed image
+      console.log("[Add] AI Analysis Success. Received data:", Object.keys(data));
+
+      // UPDATE UI STATE WITH AI DATA
       setProcessedImage(data.cleanedImageUrl || data.cleanedImage || capturedImage);
       setDetectedColors(data.color ? [data.color] : []);
-      
-      // Defensive mapping to avoid "undefined" strings in inputs
       setMaterial(data.material || '');
       setFabric(data.fabric || '');
       setPattern(data.pattern || '');
@@ -118,21 +118,20 @@ export default function AddItemScreen() {
       setMaterialType(data.materialType || '');
       setHasPattern(!!data.hasPattern);
 
-      // Improved category matching logic
+      // CATEGORY MATCHING
       if (data.category) {
         const returnedCategory = String(data.category).toLowerCase().trim();
         const validCategories = categories.map(c => ({ id: c.id, label: c.label.toLowerCase() }));
         
-        // 1. Direct ID or Label match
         let match = validCategories.find(c => c.id === returnedCategory || c.label === returnedCategory);
-        
-        // 2. Partial match fallback (e.g., "blue denim jeans" -> "jeans")
         if (!match) {
             match = validCategories.find(c => returnedCategory.includes(c.id) || returnedCategory.includes(c.label));
         }
 
         if (match) setSelectedCategory(match.id as ClothingCategory);
       }
+
+      setAnalysisSuccess(true);
     } catch (error: any) {
       console.error("[Add] Direct AI Call Failed:", error.message);
       setAnalysisError(error.message || "AI Analysis Failed.");
