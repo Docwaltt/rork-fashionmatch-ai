@@ -70,12 +70,10 @@ export default function StylingScreen() {
     return itemsToStyle;
   }, [items, selectedItemId, selectedItemIdsJSON]);
 
-  // NEW: Parallel image generation for each suggestion
   const loadOutfitImage = async (suggestionIndex: number, outfitItemIds: string[]) => {
     const functions = getFunctions(app, 'us-central1');
     const mergeImages = httpsCallable(functions, 'mergeOutfitImagesCallable');
     
-    // Find the full item objects for the selected IDs
     const outfitItems = outfitItemIds
         .map(id => items.find(i => i.id === id))
         .filter(i => !!i);
@@ -86,18 +84,22 @@ export default function StylingScreen() {
 
       setSuggestions(prev => {
         const updated = [...prev];
-        updated[suggestionIndex] = { 
-            ...updated[suggestionIndex], 
-            generatedImageUrl: imageUrl,
-            isImageLoading: false 
-        };
+        if (updated[suggestionIndex]) {
+            updated[suggestionIndex] = { 
+                ...updated[suggestionIndex], 
+                generatedImageUrl: imageUrl,
+                isImageLoading: false 
+            };
+        }
         return updated;
       });
     } catch (error) {
       console.error("[Styling] Image Merge Failed:", error);
       setSuggestions(prev => {
         const updated = [...prev];
-        updated[suggestionIndex] = { ...updated[suggestionIndex], isImageLoading: false };
+        if (updated[suggestionIndex]) {
+            updated[suggestionIndex] = { ...updated[suggestionIndex], isImageLoading: false };
+        }
         return updated;
       });
     }
@@ -115,8 +117,16 @@ export default function StylingScreen() {
       const functions = getFunctions(app, 'us-central1');
       const generateOutfits = httpsCallable(functions, 'generateOutfitsCallable');
       
+      // CRITICAL PERFORMANCE FIX: Strip all large image data before sending to AI
+      // The AI only needs metadata to curate outfits. 
+      // Large base64 strings cause network timeouts (deadline-exceeded).
+      const metadataOnlyWardrobe = stylingWardrobe.map(item => {
+        const { imageUri, cleanedImage, cleanedImageUrl, ...metadata } = item;
+        return metadata;
+      });
+
       const result: any = await generateOutfits({
-        wardrobe: stylingWardrobe, 
+        wardrobe: metadataOnlyWardrobe, 
         numSuggestions: 3,
         event: event || 'casual',
       });
@@ -125,24 +135,23 @@ export default function StylingScreen() {
       const initialSuggestions = (Array.isArray(data) ? data : []).map(s => ({ ...s, isImageLoading: true }));
       setSuggestions(initialSuggestions);
 
-      // Fire off image merging in parallel for each suggestion
       initialSuggestions.forEach((suggestion, index) => {
           loadOutfitImage(index, suggestion.items);
       });
 
     } catch (error: any) {
       console.error("[Styling] Generation Failed:", error.message);
-      Alert.alert("Generation Failed", "Could not generate outfit suggestions.");
+      Alert.alert("Generation Failed", "The AI timed out or failed. Please try again with fewer items.");
     } finally {
       setIsGenerating(false);
     }
   };
 
   useEffect(() => {
-    if (stylingWardrobe && stylingWardrobe.length >= 2 && suggestions.length === 0) {
+    if (stylingWardrobe && stylingWardrobe.length >= 2 && suggestions.length === 0 && !isGenerating) {
       handleGenerate();
     }
-  }, [stylingWardrobe]);
+  }, [stylingWardrobe, suggestions.length, isGenerating]);
 
   const renderSuggestionCard = (suggestion: OutfitSuggestion, index: number) => {
     if (!items) return null;
