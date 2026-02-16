@@ -13,7 +13,7 @@ const clipdropApiKey = defineSecret('CLIPDROP_API_KEY');
 const googleServiceAccountEmail = defineSecret('GOOGLE_SERVICE_ACCOUNT_EMAIL');
 const googlePrivateKey = defineSecret('GOOGLE_PRIVATE_KEY');
 
-// Deployment Marker: 2026-02-11T12:00:00
+// Deployment Marker: 2026-02-16T15:00:00
 
 /**
  * Callable Function for direct, authenticated use from the Mobile App.
@@ -46,7 +46,7 @@ export const generateOutfitsCallable = onCall({
   memory: '2GiB',
   timeoutSeconds: 540,
   region: 'us-central1',
-  invoker: 'public',
+  invoker: 'public', // Set to public to allow direct app calls without auth header issues
   secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey],
 }, async (request) => {
   try {
