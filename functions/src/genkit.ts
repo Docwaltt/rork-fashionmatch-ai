@@ -1,13 +1,18 @@
 import { genkit, z } from 'genkit';
 import { googleAI } from '@genkit-ai/google-genai';
 
+/**
+ * Lenient schema for clothing items. 
+ * Fields are made optional to support legacy items in the wardrobe 
+ * that might not have all the AI-extracted metadata.
+ */
 export const ClothingSchema = z.object({
   id: z.string().optional().describe('Unique ID for the clothing item'),
   imageUri: z.string().optional().describe('The original Base64 URI of the image.'),
-  category: z.string().describe('Type of item (e.g., Denim Jacket, T-Shirt, Jeans)'),
-  color: z.string().describe('Primary color detected'),
-  style: z.string().describe('Fashion style (e.g., Casual, Formal, Vintage, Streetwear)'),
-  confidence: z.number().describe('AI certainty score from 0 to 1'),
+  category: z.string().optional().default('unknown').describe('Type of item (e.g., Denim Jacket, T-Shirt, Jeans)'),
+  color: z.string().optional().default('unknown').describe('Primary color detected'),
+  style: z.string().optional().default('casual').describe('Fashion style (e.g., Casual, Formal, Vintage, Streetwear)'),
+  confidence: z.number().optional().default(1.0).describe('AI certainty score from 0 to 1'),
   cleanedImage: z.string().optional().describe('Base64 string or URL of the image with background removed'),
   isBackgroundRemoved: z.boolean().optional().describe('Whether the background removal process was successful'),
   material: z.string().optional().describe('The material of the item (e.g., Denim, Leather, Wool)'),

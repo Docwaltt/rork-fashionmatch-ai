@@ -13,6 +13,8 @@ const clipdropApiKey = defineSecret('CLIPDROP_API_KEY');
 const googleServiceAccountEmail = defineSecret('GOOGLE_SERVICE_ACCOUNT_EMAIL');
 const googlePrivateKey = defineSecret('GOOGLE_PRIVATE_KEY');
 
+// Deployment Marker: 2026-02-11T12:00:00
+
 /**
  * Callable Function for direct, authenticated use from the Mobile App.
  */
