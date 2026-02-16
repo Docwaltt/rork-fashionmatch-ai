@@ -18,58 +18,7 @@ export declare const OutfitSuggestionSchema: z.ZodObject<{
     items: string[];
     generatedImageUrl?: string | undefined;
 }>;
-export declare const generateOutfitImage: import("@genkit-ai/core/lib/action-Dt9i8CGd.js").u<z.ZodArray<z.ZodObject<{
-    id: z.ZodOptional<z.ZodString>;
-    imageUri: z.ZodOptional<z.ZodString>;
-    category: z.ZodDefault<z.ZodOptional<z.ZodString>>;
-    color: z.ZodDefault<z.ZodOptional<z.ZodString>>;
-    style: z.ZodDefault<z.ZodOptional<z.ZodString>>;
-    confidence: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
-    cleanedImage: z.ZodOptional<z.ZodString>;
-    isBackgroundRemoved: z.ZodOptional<z.ZodBoolean>;
-    material: z.ZodOptional<z.ZodString>;
-    fabric: z.ZodOptional<z.ZodString>;
-    pattern: z.ZodOptional<z.ZodString>;
-    texture: z.ZodOptional<z.ZodString>;
-    silhouette: z.ZodOptional<z.ZodString>;
-    materialType: z.ZodOptional<z.ZodString>;
-    hasPattern: z.ZodOptional<z.ZodBoolean>;
-    patternDescription: z.ZodOptional<z.ZodString>;
-}, "strip", z.ZodTypeAny, {
-    category: string;
-    color: string;
-    style: string;
-    confidence: number;
-    id?: string | undefined;
-    imageUri?: string | undefined;
-    cleanedImage?: string | undefined;
-    isBackgroundRemoved?: boolean | undefined;
-    material?: string | undefined;
-    fabric?: string | undefined;
-    pattern?: string | undefined;
-    texture?: string | undefined;
-    silhouette?: string | undefined;
-    materialType?: string | undefined;
-    hasPattern?: boolean | undefined;
-    patternDescription?: string | undefined;
-}, {
-    id?: string | undefined;
-    imageUri?: string | undefined;
-    category?: string | undefined;
-    color?: string | undefined;
-    style?: string | undefined;
-    confidence?: number | undefined;
-    cleanedImage?: string | undefined;
-    isBackgroundRemoved?: boolean | undefined;
-    material?: string | undefined;
-    fabric?: string | undefined;
-    pattern?: string | undefined;
-    texture?: string | undefined;
-    silhouette?: string | undefined;
-    materialType?: string | undefined;
-    hasPattern?: boolean | undefined;
-    patternDescription?: string | undefined;
-}>, "many">, z.ZodString, z.ZodTypeAny, import("@genkit-ai/core/lib/action-Dt9i8CGd.js").q<z.ZodTypeAny>>;
+export declare const generateOutfitImage: import("@genkit-ai/core/lib/action-Dt9i8CGd.js").u<z.ZodArray<z.ZodAny, "many">, z.ZodString, z.ZodTypeAny, import("@genkit-ai/core/lib/action-Dt9i8CGd.js").q<z.ZodTypeAny>>;
 export declare const generateOutfits: import("@genkit-ai/core/lib/action-Dt9i8CGd.js").u<z.ZodObject<{
     wardrobe: z.ZodArray<z.ZodObject<{
         id: z.ZodOptional<z.ZodString>;

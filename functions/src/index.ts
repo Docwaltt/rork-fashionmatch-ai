@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { initializeApp } from 'firebase-admin/app';
 import { processClothing } from './analysis.js';
-import { generateOutfits } from './suggestions.js';
+import { generateOutfits, generateOutfitImage } from './suggestions.js';
 
 // Initialize Firebase Admin
 initializeApp();
@@ -13,7 +13,7 @@ const clipdropApiKey = defineSecret('CLIPDROP_API_KEY');
 const googleServiceAccountEmail = defineSecret('GOOGLE_SERVICE_ACCOUNT_EMAIL');
 const googlePrivateKey = defineSecret('GOOGLE_PRIVATE_KEY');
 
-// Deployment Marker: 2026-02-16T15:00:00
+// Deployment Marker: 2026-02-16T16:00:00
 
 /**
  * Callable Function for direct, authenticated use from the Mobile App.
@@ -44,9 +44,9 @@ export const processClothingCallable = onCall({
 
 export const generateOutfitsCallable = onCall({
   memory: '2GiB',
-  timeoutSeconds: 540,
+  timeoutSeconds: 300, // Reduced as we decoupled image generation
   region: 'us-central1',
-  invoker: 'public', // Set to public to allow direct app calls without auth header issues
+  invoker: 'public',
   secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey],
 }, async (request) => {
   try {
@@ -55,6 +55,31 @@ export const generateOutfitsCallable = onCall({
     return result;
   } catch (error: any) {
     console.error("[CALLABLE] generateOutfits error:", error);
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Specialized function to merge images into a single outfit.
+ * Decoupled to prevent timeout in the main suggestions flow.
+ */
+export const mergeOutfitImagesCallable = onCall({
+  memory: '2GiB',
+  timeoutSeconds: 300,
+  region: 'us-central1',
+  invoker: 'public',
+  secrets: [googleGenAiApiKey, clipdropApiKey, googleServiceAccountEmail, googlePrivateKey],
+}, async (request) => {
+  try {
+    console.log("[CALLABLE] mergeOutfitImages START");
+    const items = request.data.items;
+    if (!items || !Array.isArray(items)) {
+        throw new HttpsError('invalid-argument', "Missing or invalid items array.");
+    }
+    const result = await generateOutfitImage.run(items);
+    return { imageUrl: result };
+  } catch (error: any) {
+    console.error("[CALLABLE] mergeOutfitImages error:", error);
     throw new HttpsError('internal', error.message);
   }
 });

@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -34,6 +34,7 @@ interface OutfitSuggestion {
   reason?: string;
   items: string[];
   generatedImageUrl?: string;
+  isImageLoading?: boolean;
 }
 
 export default function StylingScreen() {
@@ -69,6 +70,39 @@ export default function StylingScreen() {
     return itemsToStyle;
   }, [items, selectedItemId, selectedItemIdsJSON]);
 
+  // NEW: Parallel image generation for each suggestion
+  const loadOutfitImage = async (suggestionIndex: number, outfitItemIds: string[]) => {
+    const functions = getFunctions(app, 'us-central1');
+    const mergeImages = httpsCallable(functions, 'mergeOutfitImagesCallable');
+    
+    // Find the full item objects for the selected IDs
+    const outfitItems = outfitItemIds
+        .map(id => items.find(i => i.id === id))
+        .filter(i => !!i);
+
+    try {
+      const result: any = await mergeImages({ items: outfitItems });
+      const imageUrl = result.data?.imageUrl;
+
+      setSuggestions(prev => {
+        const updated = [...prev];
+        updated[suggestionIndex] = { 
+            ...updated[suggestionIndex], 
+            generatedImageUrl: imageUrl,
+            isImageLoading: false 
+        };
+        return updated;
+      });
+    } catch (error) {
+      console.error("[Styling] Image Merge Failed:", error);
+      setSuggestions(prev => {
+        const updated = [...prev];
+        updated[suggestionIndex] = { ...updated[suggestionIndex], isImageLoading: false };
+        return updated;
+      });
+    }
+  };
+
   const handleGenerate = async () => {
     if (stylingWardrobe.length < 2) {
       Alert.alert("Not Enough Clothing", "Select at least two items.");
@@ -76,18 +110,26 @@ export default function StylingScreen() {
     }
 
     setIsGenerating(true);
+    setSuggestions([]);
     try {
       const functions = getFunctions(app, 'us-central1');
       const generateOutfits = httpsCallable(functions, 'generateOutfitsCallable');
       
       const result: any = await generateOutfits({
         wardrobe: stylingWardrobe, 
-        numSuggestions: 3, // Increased to 3 for better carousel experience
+        numSuggestions: 3,
         event: event || 'casual',
       });
 
       const data = result.data?.result || result.data;
-      setSuggestions(Array.isArray(data) ? data : []);
+      const initialSuggestions = (Array.isArray(data) ? data : []).map(s => ({ ...s, isImageLoading: true }));
+      setSuggestions(initialSuggestions);
+
+      // Fire off image merging in parallel for each suggestion
+      initialSuggestions.forEach((suggestion, index) => {
+          loadOutfitImage(index, suggestion.items);
+      });
+
     } catch (error: any) {
       console.error("[Styling] Generation Failed:", error.message);
       Alert.alert("Generation Failed", "Could not generate outfit suggestions.");
@@ -127,6 +169,11 @@ export default function StylingScreen() {
                     contentFit="contain"
                     transition={500}
                 />
+                ) : suggestion.isImageLoading ? (
+                    <View style={styles.imageLoadingPlaceholder}>
+                        <ActivityIndicator color={Colors.gold[400]} />
+                        <Text style={styles.imageLoadingText}>AI MERGING...</Text>
+                    </View>
                 ) : (
                 <View style={styles.itemImageGrid}>
                     {outfitItems.map(item => (
@@ -163,13 +210,13 @@ export default function StylingScreen() {
           </TouchableOpacity>
         </View>
 
-        {(isLoading || isWardrobeLoading) ? (
+        {(isLoading && !hasSuggestions) ? (
           <View style={styles.centered}>
             <ActivityIndicator size="large" color={Colors.gold[400]} />
             <Text style={styles.loadingText}>Curating your outfits...</Text>
-            <Text style={styles.loadingSubtext}>Merging pieces with AI precision.</Text>
+            <Text style={styles.loadingSubtext}>Thinking of the perfect match.</Text>
           </View>
-        ) : !hasSuggestions ? (
+        ) : !hasSuggestions && !isWardrobeLoading ? (
           <View style={styles.centered}>
             <WandSparkles size={48} color={Colors.gray[600]} strokeWidth={1} />
             <Text style={styles.emptyText}>No Suggestions</Text>
@@ -181,7 +228,7 @@ export default function StylingScreen() {
           <View style={styles.carouselWrapper}>
              <View style={styles.subHeader}>
                 <Sparkles size={16} color={Colors.gold[400]} />
-                <Text style={styles.subHeaderText}>SWIPE TO EXPLORE</Text>
+                <Text style={styles.subHeaderText}>AI HAS CURATED {suggestions.length} OUTFITS</Text>
              </View>
              
              <ScrollView 
@@ -269,6 +316,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.gray[100],
     overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   outfitImage: {
     width: "100%",
@@ -283,6 +332,18 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   itemImage: { width: width * 0.3, height: width * 0.3 },
+  imageLoadingPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageLoadingText: {
+    marginTop: 12,
+    color: Colors.gold[400],
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 2,
+  },
   centered: {
     flex: 1,
     justifyContent: "center",
