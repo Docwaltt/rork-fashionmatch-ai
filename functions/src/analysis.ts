@@ -40,15 +40,11 @@ async function removeBackgroundWithClipdrop(imageBuffer: Buffer): Promise<Buffer
 
 async function uploadToStorage(buffer: Buffer, contentType: string): Promise<string> {
     let bucket = getStorage().bucket();
-    if (!bucket.name) {
-        const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID;
-        if (projectId) {
-            bucket = getStorage().bucket(`${projectId}.appspot.com`);
-        }
-    }
 
-    if (!bucket.name) {
-        throw new Error("Could not determine storage bucket name.");
+    // Fallback if bucket is not initialized correctly or name is missing
+    if (!bucket || !bucket.name) {
+        const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'dressya-6ff56';
+        bucket = getStorage().bucket(`${projectId}.firebasestorage.app`);
     }
 
     const fileName = `temp_cleaned/${randomUUID()}.png`;
@@ -114,7 +110,10 @@ export const processClothing = ai.defineFlow(
           { media: { url: imageForGemini } },
         ],
         output: { schema: ClothingSchema },
-        config: { responseMimeType: 'application/json' },
+        config: {
+          responseMimeType: 'application/json',
+          thinkingConfig: { thinkingLevel: 'LOW' }
+        },
       });
 
       const result = response.output;

@@ -35,6 +35,9 @@ export const generateOutfitImage = ai.defineFlow(
             ...imageParts,
         ],
         output: { format: 'uri' },
+        config: {
+          thinkingConfig: { thinkingLevel: 'LOW' }
+        },
     });
 
     return response.output || "";
@@ -75,7 +78,10 @@ export const generateOutfits = ai.defineFlow(
           model: googleAI.model('gemini-3-pro-preview'),
           prompt: [{ text: promptText }],
           output: { schema: z.array(OutfitSuggestionSchema) },
-          config: { responseMimeType: 'application/json' },
+          config: {
+            responseMimeType: 'application/json',
+            thinkingConfig: { thinkingLevel: 'LOW' }
+          },
         });
 
         // NOTE: We no longer generate images here to prevent timeouts.
