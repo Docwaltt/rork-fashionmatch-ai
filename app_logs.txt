@@ -1,3 +1,0 @@
-$ bunx rork start -p f2h9gazx15lacf31u1m1z --web --tunnel
-/usr/bin/bash: line 1: bunx: command not found
-error: script "start-web" exited with code 127
