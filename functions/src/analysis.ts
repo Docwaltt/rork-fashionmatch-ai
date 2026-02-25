@@ -44,7 +44,7 @@ async function uploadToStorage(buffer: Buffer, contentType: string): Promise<str
     // Fallback if bucket is not initialized correctly or name is missing
     if (!bucket || !bucket.name) {
         const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'dressya-6ff56';
-        bucket = getStorage().bucket(`${projectId}.firebasestorage.app`);
+        bucket = getStorage().bucket(`${projectId}.appspot.com`);
     }
 
     const fileName = `temp_cleaned/${randomUUID()}.png`;
