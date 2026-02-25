@@ -13,7 +13,7 @@ export function getFirebaseApp(): App {
     return getApp();
   }
 
-  const projectId = process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID;
+  const projectId = process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || 'dressya-6ff56';
   const privateKey = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
 
@@ -39,7 +39,7 @@ export function getFirebaseApp(): App {
  * using authenticated HTTP requests.
  */
 export async function callFirebaseFunction(functionName: string, data: any) {
-  const projectId = process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || 'closet-app-1337';
+  const projectId = process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || 'dressya-6ff56';
   const region = process.env.FIREBASE_REGION || 'us-central1';
 
   let url: string | undefined;
