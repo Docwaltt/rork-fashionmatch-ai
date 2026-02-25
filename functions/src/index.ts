@@ -5,7 +5,9 @@ import { processClothing } from './analysis.js';
 import { generateOutfits, generateOutfitImage } from './suggestions.js';
 
 // Initialize Firebase Admin
-initializeApp();
+initializeApp({
+  storageBucket: 'dressya-6ff56.appspot.com',
+});
 
 // Define Secrets
 const googleGenAiApiKey = defineSecret('GOOGLE_GENAI_API_KEY');
