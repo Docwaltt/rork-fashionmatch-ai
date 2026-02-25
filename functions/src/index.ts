@@ -6,7 +6,7 @@ import { generateOutfits, generateOutfitImage } from './suggestions.js';
 
 // Initialize Firebase Admin
 initializeApp({
-  storageBucket: 'dressya-6ff56.appspot.com',
+  storageBucket: 'dressya-6ff56.firebasestorage.app',
 });
 
 // Define Secrets
