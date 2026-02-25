@@ -24,13 +24,13 @@ export function getFirebaseApp(): App {
         privateKey,
         clientEmail,
       }),
-      storageBucket: `${projectId}.firebasestorage.app`,
+      storageBucket: `${projectId}.appspot.com`,
     });
   }
 
   return initializeApp({
     projectId,
-    storageBucket: `${projectId}.firebasestorage.app`,
+    storageBucket: `${projectId}.appspot.com`,
   });
 }
 
